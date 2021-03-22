@@ -1,0 +1,86 @@
+#################################################
+###                                            ##
+###  Near-realtime (NRT) Prediction Settings   ##
+###                                            ##  
+#################################################
+
+# Quiet? i.e., disable output
+
+quiet: False
+
+# Choice of product in the package to use: NBAR or NBART?
+
+product: NBAR
+
+# Preprend the package URL, this can be used to make GDAL
+# switch between HTTP or S3 bucket access methods
+
+urlprefix: /vsicurl
+
+# Save the observation. If this option is set to a filename then
+# the observation will be saved to disk as a GeoTiff.
+
+saveobs: obs.tif
+
+# The models to run. Each model can be given various configuration options. The
+# output can be an in-memory file by setting 'output: /vsimem/filename'. All
+# other parameters are set on the model object as attributes.
+#
+# Models can be loaded from the 'models' directory in the current path
+# (default), from a pickled file on disk (using joblib.dump) or from a pickled
+# model in a public s3 bucket. The later cases, the name should be of the form:
+#
+#   file://path_to_file:sha256checksum
+#
+# or
+#
+#   s3://bucket/key:sha256checksum
+#
+# Checksums can be generated on the command line with:
+#
+#   % shasum -a 256 filename
+# 
+# Checksums are required for security purposes and also to ensure that you know
+# which version of the model you are running. Retraining a machine learning model
+# will change the checksum of the model.
+
+models:
+
+   - name: GeomedianNBR
+     output: nbr.tif
+     inputs:
+         - filename: s2be.tif
+
+#  - name: GeomedianBSI
+#    output: /scratch/u46/dxr251/change/bsi.tif
+#
+#  - name: GeomedianNDVI
+#    output: /scratch/u46/dxr251/change/ndvi.tif
+
+#  - name: GeomedianDiff
+#    output: change.tif
+
+
+# Temporary directory. Allow environment variables in name
+# e.g., $HOME or $PBS_JOBFS
+
+tmpdir: /tmp
+
+# The shapefile containing the temporary clipping shape which
+# is generated from the area of the NRT observation.
+
+clipshpfn: clip.json
+
+# Optional GDAL configuration settings. For example: this can be used to
+# configure the /vsis3/ settings for S3 bucket writing, AWS credentials, etc.
+# Note: AWS credentials only need to be set if they're not already in the
+# environment, ~/.aws/config, or you're running on an EC2 instance with an IAM
+# role.
+
+gdalconfig:
+  GDAL_DISABLE_READDIR_ON_OPEN: YES
+  CPL_VSIL_CURL_ALLOWED_EXTENSIONS: '.tif,.geojson'
+  CPL_VSIL_USE_TEMP_FILE_FOR_RANDOM_WRITE: YES
+  CPL_CURL_VERBOSE: NO
+  CPL_DEBUG: NO
+  AWS_HTTPS: NO

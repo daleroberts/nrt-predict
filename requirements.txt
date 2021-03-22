@@ -1,0 +1,5 @@
+requests
+pyyaml
+psutil
+boto3
+gdal
