@@ -46,10 +46,10 @@ saveobs: obs.tif
 
 models:
 
-   - name: GeomedianNBR
+   - name: NoOp
      output: nbr.tif
-     inputs:
-         - filename: s2be.tif
+#     inputs:
+#         - filename: s2be.tif
 
 #  - name: GeomedianBSI
 #    output: /scratch/u46/dxr251/change/bsi.tif

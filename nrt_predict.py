@@ -683,7 +683,7 @@ def check_config(args):
     return args
 
 
-def main(url=None):
+def main(url=None, **kwargs):
     """
     Parse settings from command line and settings file into `args`,
     run, and CLI interface.
@@ -719,6 +719,11 @@ def main(url=None):
     except FileNotFoundError:
         warning(f"Configuration file '{fn}' not found.")
         warning("\nContinuing without configuration file...")
+
+    # Overwrite based on what is passed to main
+    
+    for k,v in kwargs.items():
+        args[k] = v
 
     # Run this thing
 

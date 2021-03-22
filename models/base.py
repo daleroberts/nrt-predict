@@ -39,3 +39,9 @@ class Model:
             ob.SetNoDataValue(0)
 
         del fd
+
+
+class NoOp(Model):
+
+    def predict(self, datas):
+        return datas[0]
