@@ -1,5 +1,6 @@
 requests
 pyyaml
 psutil
+pytest
 boto3
 gdal

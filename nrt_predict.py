@@ -688,14 +688,12 @@ def main(url=None):
     Parse settings from command line and settings file into `args`,
     run, and CLI interface.
     """
-    print('## NRT Change ##')
-
     parser = argparse.ArgumentParser()
 
     if url is None:
         parser.add_argument("url")
 
-    parser.add_argument("-config", default="nrt_predict.yaml")
+    parser.add_argument("-config", default="nrt_predict.yaml", metavar=('yamlfile'))
 
     # ...
 
@@ -711,6 +709,8 @@ def main(url=None):
         fn = args["config"]
         with open(fn) as fd:
             args = {**args, **yaml.safe_load(fd)}
+
+        log(f"Loading configuration from '{fn}'")
 
     except yaml.parser.ParserError as e:
         warning(f"Configuration file '{fn}' has incorrect YAML syntax: {e}")
