@@ -156,7 +156,7 @@ def check_url(url):
     if result.scheme == "" or result.scheme == "file":
         raise URLMaybeLocalFileError
 
-    if len(result.path) == 0:
+    if len(result.path) == 0 and not result.scheme == "s3":
         raise IncorrectURLError
 
 
@@ -237,14 +237,10 @@ def get_bounds(url, **args):
 
     fd = ogr.Open(fn)
 
-    if fd is None:
-
-        log(f"Opening {url} using GDAL failed, trying alternative...")
-
-        req = requests.get(fn.replace('/vsicurl/', ''))
-        fn = "/vsimem/bounds.geojson"
-        gdal.FileFromMemBuffer(fn, req.content)
-        fd = ogr.Open(fn)
+    #req = requests.get(fn.replace('/vsicurl/', ''))
+    #fn = "/vsimem/bounds.geojson"
+    #gdal.FileFromMemBuffer(fn, req.content)
+    #fd = ogr.Open(fn)
 
     layer = fd.GetLayer()
     ftr = layer.GetFeature(0)
@@ -400,14 +396,20 @@ def run(
     and then pass this data to the algorithm. Use `args` to parametrise.
     """
     try:
-        check_url(url)
+        p = urlparse(url)
 
-        if urlprefix:
-            url = f"{urlprefix}/{url}"
-
-    except URLMaybeLocalFileError:
-        if os.path.exists(url):
+        if p.scheme == "s3":
+            url = url.replace("s3://","/vsis3/")
+        elif p.scheme == "http":
+            url = f"/vsicurl/{url}"
+        elif p.scheme == "https":
+            url = f"/vsicurl/{url}"
+        elif p.scheme == "" and os.path.exists(url):
             log("\nObservation data url seems to be a local file, continuing anyway...")
+
+    except ValueError:
+        warning(f"Cannot parse URL {url}")
+        sys.exit(1)
 
     log("# Retrieving NRT observation details")
 
@@ -579,6 +581,23 @@ def check_config(args):
 
     errors = False
 
+    # Set some defaults
+
+    defaults = [
+        ("quiet", False),
+        ("product", "NBAR"),
+        ("obstmp", "/vsimem/obs.tif"),
+        ("urlprefix", ""),
+        ("tmpdir", "/tmp"),
+        ("gdalconfig", {}),
+        ("models", [])
+    ]
+
+    for arg, value in defaults:
+        if not arg in args:
+            log(f"'{arg}' not set, setting to default: {arg} = {value}")
+            args[arg] = value
+
     # Set GDAL config
     
     for k,v in args['gdalconfig'].items():
@@ -589,28 +608,14 @@ def check_config(args):
         gdal.SetConfigOption(k, v)
         log(f'GDAL option {k} = {v}')
 
-    
-    # Set some defaults
 
-    defaults = [
-        ("quiet", False),
-        ("product", "NBAR"),
-        ("obstmp", "/vsimem/obs.tif"),
-        ("urlprefix", ""),
-        ("tmpdir", "/tmp"),
-        ("gdalconfig", {}),
-    ]
+    ## Check that models exists
 
-    for arg, value in defaults:
-        if not arg in args:
-            log(f"'{arg}' not set, setting to default: {arg} = {value}")
-            args[arg] = value
-
-    nonnull = ["models"]
-    for s in nonnull:
-        if not s in args:
-            warning(f"error: '{s}' should be set in the configuration.")
-            errors = True
+    #nonnull = ["models"]
+    #for s in nonnull:
+    #    if not s in args:
+    #        warning(f"error: '{s}' should be set in the configuration.")
+    #        errors = True
 
     if not isinstance(args["models"], list):
         log("'models' must be a list of models")
@@ -683,7 +688,7 @@ def check_config(args):
     return args
 
 
-def main(url=None, **kwargs):
+def cli_entry(url=None, **kwargs):
     """
     Parse settings from command line and settings file into `args`,
     run, and CLI interface.
@@ -708,7 +713,9 @@ def main(url=None, **kwargs):
 
         fn = args["config"]
         with open(fn) as fd:
-            args = {**args, **yaml.safe_load(fd)}
+            fargs = yaml.safe_load(fd)
+            if fargs:
+                args = {**args, **fargs}
 
         log(f"Loading configuration from '{fn}'")
 
@@ -745,9 +752,9 @@ def main(url=None, **kwargs):
 if __name__ == "__main__":
     # url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-01-29/S2A_OPER_MSI_ARD_TL_EPAE_20210129T023046_A029271_T54KWA_N02.09"
     # url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-02-05/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09"
-    url = "S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09"
+    #url = "S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09"
     #url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-02-26/S2A_OPER_MSI_ARD_TL_EPAE_20210226T014820_A029671_T55HED_N02.09"
     #url = "http://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-02-26/S2A_OPER_MSI_ARD_TL_EPAE_20210226T014820_A029671_T55HDD_N02.09"
     #url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-03-13/S2B_OPER_MSI_ARD_TL_VGS4_20210313T012448_A020977_T55HED_N02.09"
 
-    main(url)
+    cli_entry()

@@ -4,7 +4,6 @@ from .base import Model
 class GeomedianNBR(Model):
 
     def predict(self, datas):
-        print("predicting")
         pre = datas[0]
         pst = datas[1]
 
