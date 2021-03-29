@@ -2,6 +2,9 @@
 """
 Run models on DEA Near-Real-Time (NRT) data.
 
+Browseable data:
+
+    http://dea-public-data.s3-website-ap-southeast-2.amazonaws.com/?prefix=L2/sentinel-2-nrt/
 """
 import numpy as np
 import itertools
