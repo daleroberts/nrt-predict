@@ -28,6 +28,8 @@ gdal.UseExceptions()
 ogr.UseExceptions()
 osr.UseExceptions()
 
+gdal.PushErrorHandler('CPLQuietErrorHandler')
+
 MODELDIR = "models"
 
 BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
@@ -38,21 +40,21 @@ GREEN = "\033[38;5;10m"
 BLUE = "\033[38;5;4m"
 
 
-class IncorrectURLError(ValueError):
+class URLParsingError(ValueError):
     """
-    Raised if incorrect URL format.
-    """
-
-
-class URLMaybeLocalFileError(ValueError):
-    """
-    Raised if URL might be a local file.
+    Raised if a URL cannot be parsed.
     """
 
 
 class IncorrectChecksumError(IOError):
     """
     Raised if the model SHA256 checksum doesn't match what is expected.
+    """
+
+
+class ConnectionError(IOError):
+    """
+    Raised if the data cannot be found or accessed.
     """
 
 
@@ -143,21 +145,29 @@ def get_model(name, **args):
     return model
 
 
-
-def check_url(url):
+def normalise_url(url):
     """
     Simple check to see if it is a valid URL.
     """
     try:
-        result = urlparse(url)
+
+        p = urlparse(url)
+
+        if p.scheme == "s3":
+            url = url.replace("s3://","/vsis3/")
+        elif p.scheme == "http":
+            url = f"/vsicurl/{url}"
+        elif p.scheme == "https":
+            url = f"/vsicurl/{url}"
+        elif p.scheme == "" and os.path.exists(url):
+            pass
+        else:
+            raise URLParsingError(f"Cannot normalise the URL {url}")
+
+        return url
+
     except ValueError:
-        raise IncorrectURLError
-
-    if result.scheme == "" or result.scheme == "file":
-        raise URLMaybeLocalFileError
-
-    if len(result.path) == 0 and not result.scheme == "s3":
-        raise IncorrectURLError
+        raise URLParsingError(f"Cannot parse the URL {url}")
 
 
 def listfmt(lst):
@@ -236,6 +246,10 @@ def get_bounds(url, **args):
     fn = f"{url}/bounds.geojson"
 
     fd = ogr.Open(fn)
+
+    if fd is None:
+        error = gdal.GetLastErrorMsg()
+        raise ConnectionError(error)
 
     #req = requests.get(fn.replace('/vsicurl/', ''))
     #fn = "/vsimem/bounds.geojson"
@@ -395,21 +409,10 @@ def run(
     Load and prepare the data required for the change detection algorithms
     and then pass this data to the algorithm. Use `args` to parametrise.
     """
-    try:
-        p = urlparse(url)
 
-        if p.scheme == "s3":
-            url = url.replace("s3://","/vsis3/")
-        elif p.scheme == "http":
-            url = f"/vsicurl/{url}"
-        elif p.scheme == "https":
-            url = f"/vsicurl/{url}"
-        elif p.scheme == "" and os.path.exists(url):
-            log("\nObservation data url seems to be a local file, continuing anyway...")
+    url = normalise_url(url)
 
-    except ValueError:
-        warning(f"Cannot parse URL {url}")
-        sys.exit(1)
+    log(f"URL: {url}")
 
     log("# Retrieving NRT observation details")
 
@@ -457,21 +460,26 @@ def run(
 
         outputs.append(output)
 
-    # Get the unique inputs
-
-    inputs = [*{*inputs}]
-
-    log(f"Inputs: {inputs}")
-
-    log("Determining observation shape")
-    clipshpfn = generate_clip_shape_from(obstmp, clipshpfn)
-
     #log(f"Removing {obstmp}")
     #gdal.Unlink(obstmp)
 
     # TODO: Option for multiple reference images?
 
     log(f"# Warping and clipping ancillary data")
+
+    # Get the unique inputs
+
+    inputs = [*{*inputs}]
+
+    if len(inputs) > 0:
+        log("Determining clip area from NRT observation")
+
+        clipshpfn = generate_clip_shape_from(obstmp, clipshpfn)
+
+        if not clipshpfn.startswith("/vsimem"):
+            log(f"Saving clipping area to disk as '{clipshpfn}'")
+    else:
+        log(f"No ancillary datasets are required!")
 
     datamap = {}
 
@@ -587,6 +595,7 @@ def check_config(args):
         ("quiet", False),
         ("product", "NBAR"),
         ("obstmp", "/vsimem/obs.tif"),
+        ("clipshpfn", "clip.geojson"),
         ("urlprefix", ""),
         ("tmpdir", "/tmp"),
         ("gdalconfig", {}),
@@ -660,6 +669,12 @@ def check_config(args):
         if "inputs" not in m:
             m["inputs"] = []
 
+        # Normalise the urls
+        
+        for ip in m["inputs"]:
+            fn = normalise_url(ip['filename'])
+            ip["filename"] = fn
+ 
         # Check existence of input files
     
         for ip in m["inputs"]:
@@ -669,6 +684,8 @@ def check_config(args):
             except RuntimeError as e:
                 warning(f"input file error: {e}")
                 errors = True
+            finally:
+                fd = None
 
         # Parse tuples as tuples of numbers for models
         
@@ -739,22 +756,24 @@ def cli_entry(url=None, **kwargs):
 
         run(**args)
 
-    except IncorrectURLError:
-        warning(f"Error: incorrect URL given: '{url}'")
+        log("Finished.")
+
+    except URLParsingError as e:
+        warning(str(e))
+        sys.exit(1)
+
+    except ConnectionError as e:
+        warning(f"Connection Error: {e}")
+        sys.exit(2)
 
     except RuntimeError as e:
-        warning(f"Error: {e}")
+        warning(f"Runtime Error: {e}")
+        sys.exit(3)
 
     except KeyboardInterrupt:
         warning(f"Processing interrupted, exiting...")
+        sys.exit(100)
 
 
 if __name__ == "__main__":
-    # url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-01-29/S2A_OPER_MSI_ARD_TL_EPAE_20210129T023046_A029271_T54KWA_N02.09"
-    # url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-02-05/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09"
-    #url = "S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09"
-    #url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-02-26/S2A_OPER_MSI_ARD_TL_EPAE_20210226T014820_A029671_T55HED_N02.09"
-    #url = "http://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-02-26/S2A_OPER_MSI_ARD_TL_EPAE_20210226T014820_A029671_T55HDD_N02.09"
-    #url = "https://data.dea.ga.gov.au/L2/sentinel-2-nrt/S2MSIARD/2021-03-13/S2B_OPER_MSI_ARD_TL_VGS4_20210313T012448_A020977_T55HED_N02.09"
-
     cli_entry()

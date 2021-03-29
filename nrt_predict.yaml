@@ -15,7 +15,7 @@ product: NBAR
 # Preprend the package URL, this can be used to make GDAL
 # switch between HTTP or S3 bucket access methods
 
-urlprefix: /vsicurl
+urlprefix: /vsis3
 
 # Save the observation. If this option is set to a filename then
 # the observation will be saved to disk as a GeoTiff.
@@ -48,8 +48,8 @@ models:
 
    - name: NoOp
      output: nbr.tif
-#     inputs:
-#         - filename: s2be.tif
+     inputs:
+          - filename: s3://test/s2be.tif
 
 #  - name: GeomedianBSI
 #    output: /scratch/u46/dxr251/change/bsi.tif
@@ -81,6 +81,10 @@ gdalconfig:
   GDAL_DISABLE_READDIR_ON_OPEN: YES
   CPL_VSIL_CURL_ALLOWED_EXTENSIONS: '.tif,.geojson'
   CPL_VSIL_USE_TEMP_FILE_FOR_RANDOM_WRITE: YES
-  CPL_CURL_VERBOSE: NO
-  CPL_DEBUG: NO
+  CPL_CURL_VERBOSE: YES
+  CPL_DEBUG: YES
   AWS_HTTPS: NO
+  #AWS_VIRTUAL_HOSTING: FALSE
+  #AWS_S3_ENDPOINT: localhost:9000
+  #AWS_SECRET_ACCESS_KEY: testtesttest
+  #AWS_ACCESS_KEY_ID: testtesttest
