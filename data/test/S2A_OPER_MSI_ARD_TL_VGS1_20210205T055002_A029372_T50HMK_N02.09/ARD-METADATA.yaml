@@ -1,0 +1,631 @@
+algorithm_information:
+    algorithm_version: 2.0
+    arg25_doi: http://dx.doi.org/10.4225/25/5487CC0D4F40B
+    nbar_doi: http://dx.doi.org/10.1109/JSTARS.2010.2042281
+    nbar_terrain_corrected_doi: http://dx.doi.org/10.1016/j.rse.2012.06.018
+extent:
+    center_dt: '2021-02-05T02:26:36.37434Z'
+    coord:
+        ll:
+            lat: -32.62105297014561
+            lon: 115.93365065035088
+        lr:
+            lat: -32.62553734145176
+            lon: 117.10404178162418
+        ul:
+            lat: -31.63064789712371
+            lon: 115.94510912288105
+        ur:
+            lat: -31.63496428932735
+            lon: 117.1029235475021
+format:
+    name: GeoTiff
+grid_spatial:
+    projection:
+        geo_ref_points:
+            ll:
+                x: 399960
+                y: 6390220
+            lr:
+                x: 509760
+                y: 6390220
+            ul:
+                x: 399960
+                y: 6500020
+            ur:
+                x: 509760
+                y: 6500020
+        spatial_reference: PROJCS["WGS 84 / UTM zone 50S",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS
+            84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",117],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",10000000],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32750"]]
+        valid_data:
+            coordinates:
+            -   -   - 494222.4251583025
+                    - 6390220.0
+                -   - 495238.3612493926
+                    - 6393746.072883667
+                -   - 497758.3612493926
+                    - 6404306.072883667
+                -   - 503698.5106067129
+                    - 6430466.714334714
+                -   - 507358.6249070469
+                    - 6447267.22814525
+                -   - 509760.0
+                    - 6459098.363321231
+                -   - 509760.0
+                    - 6500020.0
+                -   - 399960.0
+                    - 6500020.0
+                -   - 399960.0
+                    - 6390220.0
+                -   - 494222.4251583025
+                    - 6390220.0
+            type: Polygon
+id: 28eb72e3-415a-4beb-a47f-a8ca779dda07
+image:
+    bands:
+        azimuthal_exiting:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_AZIMUTHAL_EXITING.TIF
+        azimuthal_incident:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_AZIMUTHAL_INCIDENT.TIF
+        exiting:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_EXITING.TIF
+        fmask:
+            layer: 1
+            path: QA/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_FMASK.TIF
+        incident:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_INCIDENT.TIF
+        lambertian_blue:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B02.TIF
+        lambertian_coastal_aerosol:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B01.TIF
+        lambertian_contiguity:
+            layer: 1
+            path: QA/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_LAMBERTIAN_CONTIGUITY.TIF
+        lambertian_green:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B03.TIF
+        lambertian_nir_1:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B08.TIF
+        lambertian_nir_2:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B8A.TIF
+        lambertian_red:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B04.TIF
+        lambertian_red_edge_1:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B05.TIF
+        lambertian_red_edge_2:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B06.TIF
+        lambertian_red_edge_3:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B07.TIF
+        lambertian_swir_2:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B11.TIF
+        lambertian_swir_3:
+            layer: 1
+            path: LAMBERTIAN/LAMBERTIAN_B12.TIF
+        nbar_blue:
+            layer: 1
+            path: NBAR/NBAR_B02.TIF
+        nbar_coastal_aerosol:
+            layer: 1
+            path: NBAR/NBAR_B01.TIF
+        nbar_contiguity:
+            layer: 1
+            path: QA/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_NBAR_CONTIGUITY.TIF
+        nbar_green:
+            layer: 1
+            path: NBAR/NBAR_B03.TIF
+        nbar_nir_1:
+            layer: 1
+            path: NBAR/NBAR_B08.TIF
+        nbar_nir_2:
+            layer: 1
+            path: NBAR/NBAR_B8A.TIF
+        nbar_red:
+            layer: 1
+            path: NBAR/NBAR_B04.TIF
+        nbar_red_edge_1:
+            layer: 1
+            path: NBAR/NBAR_B05.TIF
+        nbar_red_edge_2:
+            layer: 1
+            path: NBAR/NBAR_B06.TIF
+        nbar_red_edge_3:
+            layer: 1
+            path: NBAR/NBAR_B07.TIF
+        nbar_swir_2:
+            layer: 1
+            path: NBAR/NBAR_B11.TIF
+        nbar_swir_3:
+            layer: 1
+            path: NBAR/NBAR_B12.TIF
+        nbart_blue:
+            layer: 1
+            path: NBART/NBART_B02.TIF
+        nbart_coastal_aerosol:
+            layer: 1
+            path: NBART/NBART_B01.TIF
+        nbart_contiguity:
+            layer: 1
+            path: QA/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_NBART_CONTIGUITY.TIF
+        nbart_green:
+            layer: 1
+            path: NBART/NBART_B03.TIF
+        nbart_nir_1:
+            layer: 1
+            path: NBART/NBART_B08.TIF
+        nbart_nir_2:
+            layer: 1
+            path: NBART/NBART_B8A.TIF
+        nbart_red:
+            layer: 1
+            path: NBART/NBART_B04.TIF
+        nbart_red_edge_1:
+            layer: 1
+            path: NBART/NBART_B05.TIF
+        nbart_red_edge_2:
+            layer: 1
+            path: NBART/NBART_B06.TIF
+        nbart_red_edge_3:
+            layer: 1
+            path: NBART/NBART_B07.TIF
+        nbart_swir_2:
+            layer: 1
+            path: NBART/NBART_B11.TIF
+        nbart_swir_3:
+            layer: 1
+            path: NBART/NBART_B12.TIF
+        relative_azimuth:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_RELATIVE_AZIMUTH.TIF
+        relative_slope:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_RELATIVE_SLOPE.TIF
+        satellite_azimuth:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_SATELLITE_AZIMUTH.TIF
+        satellite_view:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_SATELLITE_VIEW.TIF
+        solar_azimuth:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_SOLAR_AZIMUTH.TIF
+        solar_zenith:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_SOLAR_ZENITH.TIF
+        terrain_shadow:
+            layer: 1
+            path: QA/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_COMBINED_TERRAIN_SHADOW.TIF
+        timedelta:
+            layer: 1
+            path: SUPPLEMENTARY/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09_TIMEDELTA.TIF
+instrument:
+    name: MSI
+lineage:
+    ancillary:
+        aerosol:
+            atime: '2021-02-05T03:36:55.103926'
+            ctime: '2021-02-05T03:17:35.784231'
+            dataset_pathname: /cmp/aot_mean_Feb_All_Aerosols
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1029235475021011
+                -31.6349642893273497, 117.1040417816241757 -32.6255373414517607, 115.9336506503508843
+                -32.6210529701456124, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T06:31:42'
+            owner: ',,,'
+            url: file:///ancillary/aerosol/aerosol.h5
+            value: 0.08376158
+        brdf_geo_band_2:
+            atime: '2021-02-05T03:36:57.703873'
+            ctime: '2021-02-05T03:18:34.786524'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:19'
+            owner: ',,,'
+            type: brdf_geo_band_2
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b09.500m_0459_0479nm_brdf_par_fgeo.hdf
+            value: 0.011240542177797972
+        brdf_geo_band_3:
+            atime: '2021-02-05T03:37:01.087804'
+            ctime: '2021-02-05T03:18:39.942411'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:18'
+            owner: ',,,'
+            type: brdf_geo_band_3
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b12.500m_0545_0565nm_brdf_par_fgeo.hdf
+            value: 0.018844816749962138
+        brdf_geo_band_4:
+            atime: '2021-02-05T03:37:04.539733'
+            ctime: '2021-02-05T03:18:28.778657'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:19'
+            owner: ',,,'
+            type: brdf_geo_band_4
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b03.500m_0620_0670nm_brdf_par_fgeo.hdf
+            value: 0.025325340754202636
+        brdf_geo_band_8:
+            atime: '2021-02-05T03:37:08.111660'
+            ctime: '2021-02-05T03:18:32.290579'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:18'
+            owner: ',,,'
+            type: brdf_geo_band_8
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b06.500m_0841_0876nm_brdf_par_fgeo.hdf
+            value: 0.027680217325458126
+        brdf_iso_band_2:
+            atime: '2021-02-05T03:36:55.439919'
+            ctime: '2021-02-05T03:18:33.862545'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:18'
+            owner: ',,,'
+            type: brdf_iso_band_2
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b07.500m_0459_0479nm_brdf_par_fiso.hdf
+            value: 0.06833102567014993
+        brdf_iso_band_3:
+            atime: '2021-02-05T03:36:58.799850'
+            ctime: '2021-02-05T03:18:35.706504'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:19'
+            owner: ',,,'
+            type: brdf_iso_band_3
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b10.500m_0545_0565nm_brdf_par_fiso.hdf
+            value: 0.11175420452824474
+        brdf_iso_band_4:
+            atime: '2021-02-05T03:37:02.247780'
+            ctime: '2021-02-05T03:18:28.274668'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:19'
+            owner: ',,,'
+            type: brdf_iso_band_4
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b01.500m_0620_0670nm_brdf_par_fiso.hdf
+            value: 0.14524727964561565
+        brdf_iso_band_8:
+            atime: '2021-02-05T03:37:05.699709'
+            ctime: '2021-02-05T03:18:28.950653'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:18'
+            owner: ',,,'
+            type: brdf_iso_band_8
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b04.500m_0841_0876nm_brdf_par_fiso.hdf
+            value: 0.27680763100106015
+        brdf_vol_band_2:
+            atime: '2021-02-05T03:36:56.551897'
+            ctime: '2021-02-05T03:18:34.454532'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:18'
+            owner: ',,,'
+            type: brdf_vol_band_2
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b08.500m_0459_0479nm_brdf_par_fvol.hdf
+            value: 0.024083113736180526
+        brdf_vol_band_3:
+            atime: '2021-02-05T03:36:59.979826'
+            ctime: '2021-02-05T03:18:37.874456'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:19'
+            owner: ',,,'
+            type: brdf_vol_band_3
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b11.500m_0545_0565nm_brdf_par_fvol.hdf
+            value: 0.051606464864455553
+        brdf_vol_band_4:
+            atime: '2021-02-05T03:37:03.387756'
+            ctime: '2021-02-05T03:18:28.490664'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:18'
+            owner: ',,,'
+            type: brdf_vol_band_4
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b02.500m_0620_0670nm_brdf_par_fvol.hdf
+            value: 0.05697372785097683
+        brdf_vol_band_8:
+            atime: '2021-02-05T03:37:06.807686'
+            ctime: '2021-02-05T03:18:29.298645'
+            extents: POLYGON ((115.9451091228810498 -31.6306478971237084, 117.1040417816241757
+                -31.6306478971237084, 117.1040417816241757 -32.6255373414517607, 115.9451091228810498
+                -32.6255373414517607, 115.9451091228810498 -31.6306478971237084))
+            mtime: '2017-05-31T23:39:19'
+            owner: ',,,'
+            type: brdf_vol_band_8
+            url: file:///ancillary/brdf-jl/033/MCD43A1.JLWKAV.033.aust.005.b05.500m_0841_0876nm_brdf_par_fvol.hdf
+            value: 0.17712356693927003
+        elevation:
+            atime: '2021-02-05T03:36:55.427920'
+            ctime: '2021-02-05T03:17:35.784231'
+            mtime: '2017-05-31T08:03:53'
+            owner: ',,,'
+            url: file:///ancillary/elevation/world_1deg/DEM_one_deg.tif
+            value: 0.019
+        ozone:
+            atime: '2021-02-05T03:36:55.399920'
+            ctime: '2021-02-05T03:17:35.784231'
+            mtime: '2017-05-31T06:32:41'
+            owner: ',,,'
+            url: file:///ancillary/ozone/feb.tif
+            value: 0.259
+        water_vapour:
+            atime: '2021-02-05T03:36:55.335922'
+            ctime: '2021-02-05T03:19:06.329887'
+            mtime: '2021-02-05T02:05:07'
+            owner: ',,,'
+            url: file:///ancillary/water_vapour/pr_wtr.eatm.2021.tif
+            value: 3.879999923706055
+    source_datasets:
+        level1:
+            acquisition:
+                groundstation:
+                    code: VGS1
+            archiving_time: '2021-02-05T06:22:23.034689Z'
+            checksum_sha1: ccfa18ffcdee71ee0b14d18521056ef9ddcb1305
+            datastrip_id: S2A_OPER_MSI_L1C_DS_VGS1_20210205T055002_S20210205T021615_N02.09
+            datastrip_metadata: http://sentinel-s2-l1c.s3-website.eu-central-1.amazonaws.com/#products/2021/2/5/S2A_MSIL1C_20210205T021341_N0209_R060_T50HMK_20210205T055002/datastrip/0
+            datatake_id:
+                datatakeIdentifier: GS2A_20210205T021341_029372_N02.09
+                metadataLevel: Brief
+            datatake_sensing_start: '2021-02-05T02:13:41.024Z'
+            datatake_type: INS-NOBS
+            downlink_priority: NOMINAL
+            extent:
+                center_dt: '2021-02-05T02:26:36.37434Z'
+                coord:
+                    ll:
+                        lat: -32.62105297014561
+                        lon: 115.93365065035088
+                    lr:
+                        lat: -32.62553734145176
+                        lon: 117.10404178162418
+                    ul:
+                        lat: -31.63064789712371
+                        lon: 115.94510912288105
+                    ur:
+                        lat: -31.63496428932735
+                        lon: 117.1029235475021
+            format:
+                name: JPEG2000
+            grid_spatial:
+                projection:
+                    geo_ref_points:
+                        ll:
+                            x: 399960
+                            y: 6390220
+                        lr:
+                            x: 509760
+                            y: 6390220
+                        ul:
+                            x: 399960
+                            y: 6500020
+                        ur:
+                            x: 509760
+                            y: 6500020
+                    spatial_reference: PROJCS["WGS 84 / UTM zone 50S",GEOGCS["WGS
+                        84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Transverse_Mercator"],PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",117],PARAMETER["scale_factor",0.9996],PARAMETER["false_easting",500000],PARAMETER["false_northing",10000000],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","32750"]]
+                    valid_data:
+                        coordinates:
+                        -   -   - 494222.4251583025
+                                - 6390220.0
+                            -   - 495238.3612493926
+                                - 6393746.072883667
+                            -   - 497758.3612493926
+                                - 6404306.072883667
+                            -   - 503698.5106067129
+                                - 6430466.714334714
+                            -   - 507358.6249070469
+                                - 6447267.22814525
+                            -   - 509760.0
+                                - 6459098.363321231
+                            -   - 509760.0
+                                - 6500020.0
+                            -   - 399960.0
+                                - 6500020.0
+                            -   - 399960.0
+                                - 6390220.0
+                            -   - 494222.4251583025
+                                - 6390220.0
+                        type: Polygon
+            id: c94bfc22-39ea-5e0b-80d6-3edfe6c7cae0
+            image:
+                bands:
+                    B01:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B01.jp2
+                    B02:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B02.jp2
+                    B03:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B03.jp2
+                    B04:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B04.jp2
+                    B05:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B05.jp2
+                    B06:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B06.jp2
+                    B07:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B07.jp2
+                    B08:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B08.jp2
+                    B09:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B09.jp2
+                    B10:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B10.jp2
+                    B11:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B11.jp2
+                    B12:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B12.jp2
+                    B8A:
+                        layer: 1
+                        path: s3://sentinel-s2-l1c/tiles/50/H/MK/2021/2/5/0/B8A.jp2
+                cloud_cover_percentage: '33.2824'
+                degraded_anc_data_percentage: '0'
+                degraded_msi_data_percentage: '0'
+                format_quality_flag: PASSED
+                general_quality_flag: PASSED
+                geometric_quality_flag: PASSED
+                radiometric_quality_flag: PASSED
+                reflectance_conversion: '1.0299892158399'
+                sensor_quality_flag: PASSED
+                solar_irradiance: []
+                sun_azimuth: '66.6274525672535'
+                sun_elevation: '31.9260303121991'
+                tile_reference: N02.09
+                viewing_angles:
+                -   bandId: '0'
+                    measurement:
+                        azimith:
+                            value: '285.837950961079'
+                        zenith:
+                            value: '7.87778099093499'
+                    unit: degree
+                -   bandId: '9'
+                    measurement:
+                        azimith:
+                            value: '285.842715341315'
+                        zenith:
+                            value: '7.91649125697416'
+                    unit: degree
+                -   bandId: '10'
+                    measurement:
+                        azimith:
+                            value: '285.744628253272'
+                        zenith:
+                            value: '7.70667457343772'
+                    unit: degree
+                -   bandId: '1'
+                    measurement:
+                        azimith:
+                            value: '285.837858347665'
+                        zenith:
+                            value: '7.6544590056764'
+                    unit: degree
+                -   bandId: '2'
+                    measurement:
+                        azimith:
+                            value: '285.857089677736'
+                        zenith:
+                            value: '7.68791901065384'
+                    unit: degree
+                -   bandId: '3'
+                    measurement:
+                        azimith:
+                            value: '285.883496189747'
+                        zenith:
+                            value: '7.73330207807879'
+                    unit: degree
+                -   bandId: '4'
+                    measurement:
+                        azimith:
+                            value: '285.86903720336'
+                        zenith:
+                            value: '7.75334618312004'
+                    unit: degree
+                -   bandId: '5'
+                    measurement:
+                        azimith:
+                            value: '285.881856858396'
+                        zenith:
+                            value: '7.78039841378996'
+                    unit: degree
+                -   bandId: '6'
+                    measurement:
+                        azimith:
+                            value: '285.879284119819'
+                        zenith:
+                            value: '7.81015306659092'
+                    unit: degree
+                -   bandId: '7'
+                    measurement:
+                        azimith:
+                            value: '285.854259381369'
+                        zenith:
+                            value: '7.67588720472399'
+                    unit: degree
+                -   bandId: '8'
+                    measurement:
+                        azimith:
+                            value: '285.890416161624'
+                        zenith:
+                            value: '7.84261662822774'
+                    unit: degree
+                -   bandId: '11'
+                    measurement:
+                        azimith:
+                            value: '285.783907622873'
+                        zenith:
+                            value: '7.76716644177199'
+                    unit: degree
+                -   bandId: '12'
+                    measurement:
+                        azimith:
+                            value: '285.753623197985'
+                        zenith:
+                            value: '7.84464201505318'
+                    unit: degree
+            instrument:
+                name: MSI
+            lineage:
+                source_datasets: {}
+            orbit: '60'
+            orbit_direction: DESCENDING
+            platform:
+                code: SENTINEL_2A
+            processing_level: Level-1C
+            product_format:
+                name: s2_aws_pds
+            product_type: level1
+            size_bytes: 787868852
+            tile_id: S2A_OPER_MSI_L1C_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09
+platform:
+    code: SENTINEL_2A
+processing_level: Level-2
+product_type: ard
+software_versions:
+    modtran:
+        repo_url: http://www.ontar.com/software/productdetails.aspx?item=modtran
+        version: 5.2.1
+    wagl:
+        repo_url: https://github.com/GeoscienceAustralia/wagl.git
+        version: 5.0.5+33.g94f1105.dirty
+system_information:
+    hostname: ip-10-0-11-180.ap-southeast-2.compute.internal
+    runtime_id: b955fa4c-6791-11eb-b11e-02c4fa5873ee
+    time_processed: '2021-02-05T09:08:34.227110'
+    uname: 'Linux ip-10-0-11-180.ap-southeast-2.compute.internal 4.14.186-146.268.amzn2.x86_64
+        #1 SMP Tue Jul 14 18:16:52 UTC 2020 x86_64'
+tile_id: S2A_OPER_MSI_L1C_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09
