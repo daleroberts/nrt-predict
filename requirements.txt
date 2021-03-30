@@ -1,9 +1,0 @@
-requests
-pyyaml
-psutil
-pytest
-boto3
-numpy
-gdal
-joblib
-

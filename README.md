@@ -14,9 +14,15 @@ Predict from NRT data
 1. `source .env`
 
 ### Build/run locally
-1. `pipenv install`
-1. `pipenv shell`
-1. `python ./nrt_predict.py s3://dea-public-data/L2/sentinel-2-nrt/S2MSIARD/2021-03-25/S2A_OPER_MSI_ARD_TL_VGS4_20210325T014951_A030057_T56HKH_N02.09`
+1. Install dependencies in virtual enviroment: `pipenv install`
+1. Initialise virtual environment: `pipenv shell`
+1. Run the NRT predict process: `python ./nrt_predict.py s3://dea-public-data/L2/sentinel-2-nrt/S2MSIARD/2021-03-25/S2A_OPER_MSI_ARD_TL_VGS4_20210325T014951_A030057_T56HKH_N02.09`
+
+### Alternative (if you don't want to use pipenv to manage your virutal environment)
+1. Generate regular *requirements.txt*: `pipenv run pip freeze > requirements.txt`
+1. (Optional) activate your environment (eg. `source ./venv/bin/activate` etc).
+1. Install dependencies via pip: `pip install -r requirements.txt`
+1. Run the NRT predict process: `python ./nrt_predict.py s3://dea-public-data/L2/sentinel-2-nrt/S2MSIARD/2021-03-25/S2A_OPER_MSI_ARD_TL_VGS4_20210325T014951_A030057_T56HKH_N02.09`
 
 ### Build/Run the Docker container
 1. `./run_in_docker.sh`
