@@ -4,3 +4,6 @@ psutil
 pytest
 boto3
 gdal
+numpy
+joblib
+
