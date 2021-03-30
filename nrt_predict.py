@@ -156,21 +156,23 @@ def normalise_url(url):
 
         p = urlparse(url)
 
-        if p.scheme == "s3":
-            url = url.replace("s3://","/vsis3/")
-        elif p.scheme == "http":
-            url = f"/vsicurl/{url}"
-        elif p.scheme == "https":
-            url = f"/vsicurl/{url}"
-        elif p.scheme == "" and os.path.exists(url):
-            pass
-        else:
-            raise URLParsingError(f"Cannot normalise the URL {url}")
+    except ValueError as e:
+        raise URLParsingError(f"Cannot parse the URL {url}: {e}")
 
-        return url
+    if p.scheme == "s3":
+        url = url.replace("s3://","/vsis3/")
+    elif p.scheme == "http":
+        url = f"/vsicurl/{url}"
+    elif p.scheme == "https":
+        url = f"/vsicurl/{url}"
+    elif p.scheme == "" and os.path.exists(url):
+        pass
+    elif p.scheme == "" and not os.path.exists(url):
+        pass
+    else:
+        raise URLParsingError(f"Cannot normalise the URL {url}")
 
-    except ValueError:
-        raise URLParsingError(f"Cannot parse the URL {url}")
+    return url
 
 
 def listfmt(lst):
@@ -274,7 +276,12 @@ def get_observation(url, product="NBAR", onlymask=False, **args):
 
     pkg = parse_pkg(url)
 
-    stripped_url = url.replace('/vsicurl/', '')
+    if url.startswith('/vsis3'):
+        stripped_url = url.replace('/vsis3/dea-public-data', 'https://data.dea.ga.gov.au')
+
+    if url.startswith('/vsicurl'):
+        stripped_url = url.replace('/vsicurl', '')
+
 
     fn = f"{url}/QA/{pkg}_FMASK.TIF"
     fd = gdal.Open(fn)
@@ -440,6 +447,7 @@ def run(
         ob = fd.GetRasterBand(i + 1)
         ob.WriteArray(obsdata[:, :, i])
         ob.SetNoDataValue(0)
+        ob.SetDescription(f"S2-{BANDS[i]}")
     del fd
 
     log(f"# Preparing ancillary data")
@@ -481,6 +489,7 @@ def run(
 
         if not clipshpfn.startswith("/vsimem"):
             log(f"Saving clipping area to disk as '{clipshpfn}'")
+            log(f"Proj: {prj}") 
     else:
         log(f"No ancillary datasets are required!")
 
@@ -598,7 +607,7 @@ def check_config(args):
         ("quiet", False),
         ("product", "NBAR"),
         ("obstmp", "/vsimem/obs.tif"),
-        ("clipshpfn", "clip.geojson"),
+        ("clipshpfn", "clip.json"),
         ("urlprefix", ""),
         ("tmpdir", "/tmp"),
         ("gdalconfig", {}),
@@ -680,15 +689,15 @@ def check_config(args):
  
         # Check existence of input files
     
-        for ip in m["inputs"]:
-            fn = ip['filename']
-            try:
-                fd = gdal.Open(fn)
-            except RuntimeError as e:
-                warning(f"input file error: {e}")
-                errors = True
-            finally:
-                fd = None
+        #for ip in m["inputs"]:
+        #    fn = ip['filename']
+        #    try:
+        #        fd = gdal.Open(fn)
+        #    except RuntimeError as e:
+        #        warning(f"Input file error: {e}")
+        #        errors = True
+        #    finally:
+        #        fd = None
 
         # Parse tuples as tuples of numbers for models
         
