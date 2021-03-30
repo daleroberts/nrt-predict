@@ -3,7 +3,7 @@ pyyaml
 psutil
 pytest
 boto3
-gdal
 numpy
+gdal
 joblib
 
