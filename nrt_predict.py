@@ -279,7 +279,7 @@ def get_observation(url, product="NBAR", onlymask=False, **args):
     if url.startswith('/vsis3'):
         stripped_url = url.replace('/vsis3/dea-public-data', 'https://data.dea.ga.gov.au')
     elif url.startswith('/vsicurl'):
-        stripped_url = url.replace('/vsicurl', '')
+        stripped_url = url.replace('/vsicurl/', '')
     else:
         stripped_url = url
 
