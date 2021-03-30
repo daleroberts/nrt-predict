@@ -5,7 +5,7 @@ Predict from NRT data
 
 ### Install Dependencies (MacOS)
 1. Docker - https://docs.docker.com/docker-for-mac/install/
-1. GDAL: `homebrew install gdal`
+1. GDAL: `brew install gdal`
 1. Pipenv: `brew install pipenv`
 
 ### Configure Environment
