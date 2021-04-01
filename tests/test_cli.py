@@ -8,7 +8,7 @@ import os
 
 PORT = 9000
 HOST = os.environ['S3_HOST']
-KEY = "testtesttest"
+KEY = os.environ['MINIO_ROOT_PASSWORD']
 
 @pytest.fixture(scope="session")
 def minio():
@@ -21,11 +21,7 @@ def minio():
     os.environ['SECRET_KEY'] = KEY
     os.environ['ENABLE_HTTPS'] = "0"
     
-    command = "minio server data"
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, preexec_fn=os.setsid) 
-
-    # wait for start
-    
+    # wait for Minio to become available - via Docker compose
     not_running = True
     while not_running:
         try:
@@ -38,10 +34,6 @@ def minio():
             s.close()
     
     yield
-
-    # Teardown
-    
-    os.killpg(process.pid, signal.SIGTERM)
 
 def write_gdalconfig_for_minio(f):
     f.write_text(textwrap.dedent(f"""\n
@@ -70,7 +62,7 @@ def test_gdal_with_minio(minio):
     gdal.SetConfigOption('AWS_SECRET_ACCESS_KEY', KEY)
     gdal.SetConfigOption('AWS_ACCESS_KEY_ID', KEY)
     
-    path = '/vsis3/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09/NBAR/NBAR_B01.TIF'
+    path = '/minio/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09/NBAR/NBAR_B01.TIF'
     ds = gdal.Open(path)
     
     band = ds.GetRasterBand(1)

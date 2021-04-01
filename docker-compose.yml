@@ -14,7 +14,7 @@ services:
       AWS_ACCESS_KEY_ID: minio123
       ACCESS_KEY: minio
       SECRET_KEY: minio123
-      S3_HOST: localhost
+      S3_HOST: minio
       S3_PORT: 9000
     volumes:
       - logvolume01:/var/log
