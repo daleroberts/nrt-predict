@@ -9,6 +9,7 @@
 ##docker run --name nft-predict -dit nft-predict:latest
 docker compose down
 docker compose build
-docker compose up
-
+docker compose up -d
+docker exec -it nft-predict pytest ./tests --full-trace
+docker compose down
 

@@ -10,14 +10,16 @@ Run prediction models on [Digital Earth Australia](https://www.ga.gov.au/dea) Ne
 1. Docker - https://docs.docker.com/docker-for-mac/install/
 1. GDAL: `brew install gdal`
 1. Pipenv: `brew install pipenv`
+1. PyEnv: `brew install pyenv`
 
-### Configure Environment
-1. `cp .env.template .env`
+### Configure The Environment
+1. As a general rule, all configuration settings should be configured as environment variables. There is a template .env file with expected settings in `.env.template`
+1. Copy the template - `cp .env.template .env`
 1. Edit `.env` with your local environment variables. Note that `.env` is intentially excluded from the git report via `.gitignore`.
-1. `source .env`
+1. Load the environment variables in the current context - `source .env`
 
 ### Build/run locally
-1. pyenv 3.8
+1. Initialise python 3.8 (version required defined within Pipfile) - `pyenv 3.8`
 1. Install dependencies in virtual enviroment: `pipenv install`
 1. Initialise virtual environment: `pipenv shell`
 1. Run the NRT predict process: `python ./nrt_predict.py data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09`
@@ -29,7 +31,7 @@ Run prediction models on [Digital Earth Australia](https://www.ga.gov.au/dea) Ne
 1. Run the NRT predict process: `python ./nrt_predict.py data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09`
 
 ### Build/Run the Docker container
-1. `./run_in_docker.sh`
+1. `./run_docker_tests.sh`
 
 ### Run a model in Docker
 1. `docker exec -it nft-predict bash`

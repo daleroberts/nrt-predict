@@ -6,28 +6,21 @@ import socket
 import time
 import os
 
-PORT = 9000
-HOST = os.environ['S3_HOST']
-USER = os.environ['MINIO_ROOT_USERNAME']
-PASSWORD = os.environ['MINIO_ROOT_PASSWORD']
+AWS_S3_HOSTNAME = os.environ['AWS_S3_HOSTNAME']
+AWS_S3_PORT = int(os.environ['AWS_S3_PORT'])
+AWS_S3_ENDPOINT = f'{AWS_S3_HOSTNAME}:{AWS_S3_PORT}'
+AWS_ACCESS_KEY_ID = os.environ['AWS_ACCESS_KEY_ID']
+AWS_SECRET_ACCESS_KEY = os.environ['AWS_SECRET_ACCESS_KEY']
 
 @pytest.fixture(scope="session")
 def minio():
-    # Setup
-    
-    os.environ['MINIO_ACCESS_KEY'] = USER
-    os.environ['MINIO_SECRET_KEY'] = PASSWORD
-    os.environ['MINT_MODE'] = 'full'
-    os.environ['ACCESS_KEY'] = USER
-    os.environ['SECRET_KEY'] = PASSWORD
-    os.environ['ENABLE_HTTPS'] = "0"
-    
-    # wait for Minio to become available - via Docker compose
+
+    # wait for Minio to become available - via Docker compose instance
     not_running = True
     while not_running:
         try:
             s = socket.socket()
-            s.connect((HOST, PORT))
+            s.connect((AWS_S3_HOSTNAME, AWS_S3_PORT))
             not_running = False
         except Exception as e: 
             time.sleep(0.5)
@@ -46,9 +39,9 @@ def write_gdalconfig_for_minio(f):
       CPL_DEBUG: YES
       AWS_HTTPS: NO
       AWS_VIRTUAL_HOSTING: FALSE
-      AWS_S3_ENDPOINT: {HOST}:{PORT}
-      AWS_SECRET_ACCESS_KEY: {PASSWORD}
-      AWS_ACCESS_KEY_ID: {USER}
+      AWS_S3_ENDPOINT: {AWS_S3_ENDPOINT}
+      AWS_SECRET_ACCESS_KEY: {AWS_SECRET_ACCESS_KEY}
+      AWS_ACCESS_KEY_ID: {AWS_ACCESS_KEY_ID}
     """))
 
 def test_gdal_with_minio(minio):
@@ -59,9 +52,9 @@ def test_gdal_with_minio(minio):
     gdal.SetConfigOption('AWS_HTTPS', 'NO')
     gdal.SetConfigOption('GDAL_DISABLE_READDIR_ON_OPEN', 'YES')
     gdal.SetConfigOption('AWS_VIRTUAL_HOSTING', 'FALSE')
-    gdal.SetConfigOption('AWS_S3_ENDPOINT', f'{HOST}:{PORT}')
-    gdal.SetConfigOption('AWS_SECRET_ACCESS_KEY', PASSWORD)
-    gdal.SetConfigOption('AWS_ACCESS_KEY_ID', USER)
+    gdal.SetConfigOption('AWS_S3_ENDPOINT', f'{AWS_S3_ENDPOINT}')
+    gdal.SetConfigOption('AWS_SECRET_ACCESS_KEY', AWS_SECRET_ACCESS_KEY)
+    gdal.SetConfigOption('AWS_ACCESS_KEY_ID', AWS_ACCESS_KEY_ID)
     
     path = './data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09/NBAR/NBAR_B01.TIF'
     ds = gdal.Open(path)
