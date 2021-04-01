@@ -7,7 +7,7 @@ import time
 import os
 
 PORT = 9000
-HOST = 'localhost'
+HOST = os.environ['S3_HOST']
 KEY = "testtesttest"
 
 @pytest.fixture(scope="session")
