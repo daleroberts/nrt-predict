@@ -756,6 +756,9 @@ def cli_entry(url=None, **kwargs):
         warning(f"Configuration file '{fn}' not found.")
         warning("\nContinuing without configuration file...")
 
+        #TODO - Here we should load default settings from default config file in this module so that the calling application has sensible defaults.
+
+
     # Overwrite based on what is passed to main
     
     for k,v in kwargs.items():
