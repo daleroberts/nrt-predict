@@ -24,7 +24,7 @@ setup(
         'nrt_predict.py'
     ],
     package_data={
-        "" : ["nrt_predict.yaml"]
+        "" : ["config/nrt-default-config.yaml"]
     },
     include_package_data=True,
     zip_safe=False
