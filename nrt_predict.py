@@ -26,6 +26,7 @@ from urllib.request import urlopen, URLError
 from pydoc import locate
 from uuid import uuid4
 from io import BytesIO
+from importlib.resources import open_text
 
 gdal.UseExceptions()
 ogr.UseExceptions()
@@ -42,6 +43,7 @@ RED = "\033[38;5;9m"
 GREEN = "\033[38;5;10m"
 BLUE = "\033[38;5;4m"
 
+DEFAULT_CONFIG_YAML_FILE="nrt-default-config.yaml"
 
 class URLParsingError(ValueError):
     """
@@ -727,7 +729,7 @@ def cli_entry(url=None, **kwargs):
     if url is None:
         parser.add_argument("url")
 
-    parser.add_argument("-config", default="nrt_predict.yaml", metavar=('yamlfile'))
+    parser.add_argument("-config", default="", metavar=('yamlfile'))
 
     # ...
 
@@ -752,12 +754,25 @@ def cli_entry(url=None, **kwargs):
         warning(f"Configuration file '{fn}' has incorrect YAML syntax: {e}")
         warning("\nContinuing without configuration file...")
 
+        #TODO - We should probably exit here.
+
     except FileNotFoundError:
         warning(f"Configuration file '{fn}' not found.")
-        warning("\nContinuing without configuration file...")
+        
 
-        #TODO - Here we should load default settings from default config file in this module so that the calling application has sensible defaults.
+        #TODO - Here we should load settings from default config file in this module so that the calling application has sensible defaults.
+        warning(f"\nLoading default configuration settings from '{DEFAULT_CONFIG_YAML_FILE}' ")
+        import config
 
+        try:
+            with open_text(config,DEFAULT_CONFIG_YAML_FILE) as fd:
+                fargs = yaml.safe_load(fd)
+                if fargs:
+                    args = {**args, **fargs}
+        except Exception as e:
+            warning(f"Exception encountered: {e}")
+            warning(f"Unable to load default configuration settings, continuing anyway...")
+            # TODO - we should probably exit here.
 
     # Overwrite based on what is passed to main
     
