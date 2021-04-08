@@ -1,1 +1,1 @@
-include config/nrt-default.config.yaml
+include nrtpredict/config/nrt-default-config.yaml
