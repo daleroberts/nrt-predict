@@ -162,7 +162,7 @@ def normalise_url(url):
         raise URLParsingError(f"Cannot parse the URL {url}: {e}")
 
     if p.scheme == "s3":
-        url = url.replace("s3://","/vsis3/")
+        url = url.replace("s3://","/vsis3/") # TODO: Why is this replaced?
     elif p.scheme == "http":
         url = f"/vsicurl/{url}"
     elif p.scheme == "https":
