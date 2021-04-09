@@ -9,6 +9,7 @@ import os
 PORT = 9000
 HOST = 'localhost'
 KEY = "testtesttest"
+NRT_PREDICT_BINARY_PATH = r"./nrt_predict.py"
 
 @pytest.fixture(scope="session")
 def minio():
@@ -82,19 +83,19 @@ def test_gdal_with_minio(minio):
 def test_empty_config_s3(minio, tmp_path):
     f = tmp_path / "test.yaml"
     write_gdalconfig_for_minio(f)
-    subprocess.check_call(['./nrt_predict.py', '-c', f, 's3://test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
+    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 's3://test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
 
 #def test_empty_config_http(minio, tmp_path):
 #    f = tmp_path / "test.yaml"
 #    write_gdalconfig_for_minio(f)
-#    subprocess.check_call(['./nrt_predict.py', '-c', f, f'http://{KEY}:{KEY}@{HOST}:{PORT}/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
+#    subprocess.check_call(['../nrt_predict.py', '-c', f, f'http://{KEY}:{KEY}@{HOST}:{PORT}/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
 
 def test_empty_config_local(minio, tmp_path):
     f = tmp_path / "test.yaml"
-    subprocess.check_call(['./nrt_predict.py', '-c', f, 'data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
+    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 'data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
 
 def test_program_in_cwd():
-    assert os.path.exists("nrt_predict.py")
+    assert os.path.exists(NRT_PREDICT_BINARY_PATH)
 
 def test_ancillary_on_s3(minio, tmp_path):
     f = tmp_path / "test.yaml"
@@ -108,9 +109,9 @@ def test_ancillary_on_s3(minio, tmp_path):
           - filename: s3://test/s2be.tif
     """))
     write_gdalconfig_for_minio(f)
-    subprocess.check_call(['./nrt_predict.py', '-c', f, 's3://test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
+    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 's3://test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
     #assert os.path.exists(g)
 
 def test_help():
-    status = os.system("./nrt_predict.py --help")
+    status = os.system(f'{NRT_PREDICT_BINARY_PATH} --help')
     assert status == 0
