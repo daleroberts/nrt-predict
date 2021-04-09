@@ -10,6 +10,7 @@ Run prediction models on [Digital Earth Australia](https://www.ga.gov.au/dea) Ne
 1. Docker - https://docs.docker.com/docker-for-mac/install/
 1. GDAL: `brew install gdal`
 1. Pipenv: `brew install pipenv`
+1. MinIO (required for pytests): `brew install minio`
 
 ### Configure Environment
 1. `cp .env.template .env`
@@ -29,10 +30,6 @@ Run prediction models on [Digital Earth Australia](https://www.ga.gov.au/dea) Ne
 
 ### Build/Run the Docker container
 1. `./run_in_docker.sh`
-
-### Run a model in Docker
-1. `docker exec -it nft-predict bash`
-1. `python -m nrtpredict s3://dea-public-data/L2/sentinel-2-nrt/S2MSIARD/2021-03-25/S2A_OPER_MSI_ARD_TL_VGS4_20210325T014951_A030057_T56HKH_N02.09`
 
 ## Information
 

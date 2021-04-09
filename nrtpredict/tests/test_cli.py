@@ -6,23 +6,20 @@ import socket
 import time
 import os
 
-PORT = 9000
-HOST = 'localhost'
-KEY = "testtesttest"
+AWS_S3_HOSTNAME = os.environ['AWS_S3_HOSTNAME']
+AWS_S3_PORT = os.environ['AWS_S3_PORT']
+AWS_S3_ENDPOINT = f'{AWS_S3_HOSTNAME}:{AWS_S3_PORT}'
+AWS_ACCESS_KEY_ID = os.environ['AWS_ACCESS_KEY_ID']
+AWS_SECRET_ACCESS_KEY = os.environ['AWS_SECRET_ACCESS_KEY']
+
 NRT_PREDICT_BINARY_PATH = r"./nrt_predict.py"
 
 @pytest.fixture(scope="session")
 def minio():
     # Setup
-    
-    os.environ['MINIO_ACCESS_KEY'] = KEY
-    os.environ['MINIO_SECRET_KEY'] = KEY
-    os.environ['MINT_MODE'] = 'full'
-    os.environ['ACCESS_KEY'] = KEY
-    os.environ['SECRET_KEY'] = KEY
     os.environ['ENABLE_HTTPS'] = "0"
     
-    command = "minio server data"
+    command = "minio server ./data"
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, preexec_fn=os.setsid) 
 
     # wait for start
@@ -31,7 +28,7 @@ def minio():
     while not_running:
         try:
             s = socket.socket()
-            s.connect((HOST, PORT))
+            s.connect((AWS_S3_HOSTNAME, AWS_S3_PORT))
             not_running = False
         except Exception as e: 
             time.sleep(0.5)
@@ -54,11 +51,12 @@ def write_gdalconfig_for_minio(f):
       CPL_DEBUG: YES
       AWS_HTTPS: NO
       AWS_VIRTUAL_HOSTING: FALSE
-      AWS_S3_ENDPOINT: {HOST}:{PORT}
-      AWS_SECRET_ACCESS_KEY: {KEY}
-      AWS_ACCESS_KEY_ID: {KEY}
+      AWS_S3_ENDPOINT: {AWS_S3_ENDPOINT}
+      AWS_SECRET_ACCESS_KEY: {AWS_SECRET_ACCESS_KEY}
+      AWS_ACCESS_KEY_ID: {AWS_ACCESS_KEY_ID}
     """))
 
+# TODO: Is this actually using minio?
 def test_gdal_with_minio(minio):
     from osgeo import gdal
     import numpy as np
@@ -67,11 +65,12 @@ def test_gdal_with_minio(minio):
     gdal.SetConfigOption('AWS_HTTPS', 'NO')
     gdal.SetConfigOption('GDAL_DISABLE_READDIR_ON_OPEN', 'YES')
     gdal.SetConfigOption('AWS_VIRTUAL_HOSTING', 'FALSE')
-    gdal.SetConfigOption('AWS_S3_ENDPOINT', f'{HOST}:{PORT}')
-    gdal.SetConfigOption('AWS_SECRET_ACCESS_KEY', KEY)
-    gdal.SetConfigOption('AWS_ACCESS_KEY_ID', KEY)
+    gdal.SetConfigOption('AWS_S3_ENDPOINT', f'{AWS_S3_ENDPOINT}')
+    gdal.SetConfigOption('AWS_SECRET_ACCESS_KEY', AWS_SECRET_ACCESS_KEY)
+    gdal.SetConfigOption('AWS_ACCESS_KEY_ID', AWS_ACCESS_KEY_ID)
+
     
-    path = '/vsis3/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09/NBAR/NBAR_B01.TIF'
+    path = './data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09/NBAR/NBAR_B01.TIF'
     ds = gdal.Open(path)
     
     band = ds.GetRasterBand(1)
@@ -83,7 +82,7 @@ def test_gdal_with_minio(minio):
 def test_empty_config_s3(minio, tmp_path):
     f = tmp_path / "test.yaml"
     write_gdalconfig_for_minio(f)
-    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 's3://test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
+    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 's3://minio/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
 
 #def test_empty_config_http(minio, tmp_path):
 #    f = tmp_path / "test.yaml"
@@ -92,7 +91,7 @@ def test_empty_config_s3(minio, tmp_path):
 
 def test_empty_config_local(minio, tmp_path):
     f = tmp_path / "test.yaml"
-    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 'data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
+    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, './data/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
 
 def test_program_in_cwd():
     assert os.path.exists(NRT_PREDICT_BINARY_PATH)
@@ -106,10 +105,10 @@ def test_ancillary_on_s3(minio, tmp_path):
       - name: NoOp
         output: nbr.tif
         inputs:
-          - filename: s3://test/s2be.tif
+          - filename: s3://minio/test/s2be.tif
     """))
     write_gdalconfig_for_minio(f)
-    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 's3://test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
+    subprocess.check_call([NRT_PREDICT_BINARY_PATH, '-c', f, 's3://minio/test/S2A_OPER_MSI_ARD_TL_VGS1_20210205T055002_A029372_T50HMK_N02.09'])
     #assert os.path.exists(g)
 
 def test_help():
