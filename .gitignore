@@ -7,7 +7,7 @@ tests/.DS_Store
 models/.DS_Store
 data/.minio.sys/
 .DS_Store
-data/S2B*
+data/S2*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
