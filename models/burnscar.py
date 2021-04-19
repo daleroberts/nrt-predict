@@ -1,4 +1,5 @@
 from .base import Model
+import numpy as np
 
 
 class GeomedianNBR(Model):
@@ -70,9 +71,7 @@ class GeomedianDiff(Model):
 
 class GeomedianDiffSingle(Model):
 
-    def predict(self, datas):
-        pre = datas[0]
-        pst = datas[1]
+    def predict(self, pre, pst):
 
         pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
         pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
@@ -89,13 +88,9 @@ class GeomedianDiffSingle(Model):
 
         diff = np.dstack([pre_nbr - pst_nbr, pst_bsi - pre_bsi, pst_ndvi - pre_ndvi])
 
-        #np.clip(diff, -1, 1, out=diff)
+        img = np.prod(1+diff, axis=2) - 1
 
-        img = np.prod(diff, axis=2)
-
-        from skimage.feature import hessian_matrix_det
-
-        img = hessian_matrix_det(img.astype(np.float64), sigma=0.5, approximate=True)
+        #from skimage.feature import hessian_matrix_det
+        #img = hessian_matrix_det(img.astype(np.float64), sigma=0.5, approximate=True)
 
         return img.astype(np.float32)
-
