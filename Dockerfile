@@ -1,18 +1,19 @@
 FROM osgeo/gdal:ubuntu-small-3.2.2
 
-RUN apt-get -qq update
-RUN apt-get install -qq python3-pip
+# Copy the application to the container
 
-RUN pip3 install pipenv
+COPY . /app
+WORKDIR /app
 
-COPY . ./
+# Update and install requirements
 
-# Pipenv Settings
-RUN export LC_ALL='en_US.UTF-8'
-RUN export LANG='en_US.UTF-8'
+RUN apt-get -qq -y update && \
+    apt-get install -qq --no-install-recommends python3-pip make && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    pip3 install -r requirements.txt
 
-RUN pipenv install --sequential --system
+# Install minio for testing the code
 
-
-
+ADD https://dl.min.io/server/minio/release/linux-amd64/minio minio
+RUN chmod +x minio
 

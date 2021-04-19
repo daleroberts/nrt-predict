@@ -15,11 +15,11 @@ class Model:
         for k,v in kwargs.items():
             setattr(self, k, v)
 
-    def predict(self, datas):
+    def predict(self, *datas):
         raise NotImplementedError
 
-    def predict_and_save(self, datas, fn):
-        result = self.predict(datas)
+    def predict_and_save(self, fn, *datas):
+        result = self.predict(*datas)
 
         if len(result.shape) == 2:
             result = result[:, :, np.newaxis]
@@ -43,5 +43,5 @@ class Model:
 
 class NoOp(Model):
 
-    def predict(self, datas):
-        return datas[0]
+    def predict(self, data):
+        return data

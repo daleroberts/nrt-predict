@@ -48,6 +48,11 @@ models:
    - name: NoOp
      output: obs.tif
 
+   - name: GeomedianDiffSingle
+     output: diff.tif
+     inputs:
+         - filename: clip.tif
+
 # Temporary directory. Allow environment variables in name
 # e.g., $HOME or $PBS_JOBFS
 

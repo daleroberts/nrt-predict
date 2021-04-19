@@ -72,6 +72,24 @@ def get_s3_client():
     return boto3.client('s3', config=Config(signature_version=UNSIGNED))
 
 
+def checksum_array(arr):
+    """
+    Checksum a numpy array.
+    """
+    hasher = hashlib.sha256()
+    hasher.update(arr.tobytes())
+    return hasher.hexdigest()
+
+def checksum_file(f, blocksize=2<<15):
+    """
+    Checksum a file-like object.
+    """
+    hasher = hashlib.sha256()
+    for block in iter(lambda: f.read(blocksize), b""):
+        hasher.update(block)
+    f.seek(0)
+    return hasher.hexdigest()
+
 def check_checksum(f, checksum, blocksize=2<<15):
     """
     Check that the SHA256 checksum of a file-type object matches the 'checksum'. Raises
@@ -82,11 +100,7 @@ def check_checksum(f, checksum, blocksize=2<<15):
       % shasum -a 256 filename
     
     """
-    hasher = hashlib.sha256()
-    for block in iter(lambda: f.read(blocksize), b""):
-        hasher.update(block)
-
-    actual = hasher.hexdigest()
+    actual = checksum_file(f)
 
     log(f"Expected SHA256 checksum: {checksum}")
     log(f"Actual SHA256 checksum: {actual}")
@@ -96,6 +110,8 @@ def check_checksum(f, checksum, blocksize=2<<15):
 
     log("Checksum matches.")
         
+
+#TODO: path@sha256:123123 format?
 
 def get_model(name, **args):
     """
@@ -310,14 +326,18 @@ def get_observation(url, product="NBAR", onlymask=False, **args):
 
     log("# Loading data")
 
+    hc = checksum_array(mask)
+    log(f"Band MASK (sha256:{hc})")
+
     # Load other bands
 
     data = np.empty((ysize, xsize, len(BANDS)), dtype=np.float32)
     for i, band in enumerate(BANDS):
         fn = f"{url}/{product}/{product}_{band}.TIF"
-        log(f"Loading band {band}")
         fd = gdal.Open(fn)
         fd.ReadAsArray(buf_obj=data[:, :, i], buf_ysize=ysize, buf_xsize=xsize)
+        hc = checksum_array(data[:,:,i])
+        log(f"Band {band}  (sha256:{hc})")
 
     # TODO: set in config?
 
@@ -400,7 +420,6 @@ def generate_clip_shape_from(fn, shpfn):
 
 def run(
     url=None,
-    urlprefix=None,
     obstmp=None,
     clipshpfn=None,
     inputs=None,
@@ -573,7 +592,7 @@ def run(
 
         try:
 
-            model.predict_and_save(datas, outfn)
+            model.predict_and_save(outfn, *datas)
 
         except Exception as e:
             traceback = e.__traceback__
@@ -606,9 +625,8 @@ def check_config(args):
     defaults = [
         ("quiet", False),
         ("product", "NBAR"),
-        ("obstmp", "/vsimem/obs.tif"),
-        ("clipshpfn", "clip.json"),
-        ("urlprefix", ""),
+        ("obstmp", "/tmp/obs.tif"),
+        ("clipshpfn", "/tmp/clip.json"),
         ("tmpdir", "/tmp"),
         ("gdalconfig", {}),
         ("models", [])
@@ -727,7 +745,7 @@ def cli_entry(url=None, **kwargs):
     if url is None:
         parser.add_argument("url")
 
-    parser.add_argument("-config", default="nrt_predict.yaml", metavar=('yamlfile'))
+    parser.add_argument("-config", default="nrtpredict.yaml", metavar=('yamlfile'))
 
     # ...
 

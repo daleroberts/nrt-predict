@@ -1,6 +1,7 @@
 define HELP
 make test|doc|upload|clean
 
+  deps        - install dependencies
   test        - run tests
   doc         - build documentation
   upload      - upload to pypi
@@ -11,8 +12,19 @@ export HELP
 help:
 	@echo "$$HELP"
 
-test:
+deps:
+	python -m pip install -r requirements.txt 
+
+test: 
 	pytest
+
+build-docker: Dockerfile requirements.txt
+	#docker kill nrt-predict
+	docker container rm -f nrt-predict
+	docker build . -t nrt-predict 
+
+test-docker: build-docker
+	docker run --name nrt-predict -it nrt-predict:latest pytest
 
 clean:
 	@rm -fr data/S2*
@@ -31,4 +43,4 @@ upload:
 	twine upload dist/*
 	
 
-.PHONY: clean test doc upload
+.PHONY: clean test doc upload deps build-docker test-docker
