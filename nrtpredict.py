@@ -247,15 +247,14 @@ def parse_pkg(url):
     Package name parsing.
     """
     # TODO: Does this need to be improved for edge cases?
-    s = [x for x in url.split("/") if len(x) > 0]
-    return s[-1]
+    return [x for x in url.split("/") if len(x) > 0][-1]
 
 
 def parse_obsdate(url):
     """
     Parse observation date from url.
     """
-    pkg = [x for x in url.split("/") if len(x) > 0][-1]
+    pkg = parse_pkg(url)
     return datetime.strptime(pkg.split('_')[6], "%Y%m%dT%H%M%S")
 
 
@@ -425,13 +424,6 @@ def run(
     inputs=None,
     tmpdir=None,
     models=None,
-    hotspots_only=False,
-    hotspots_username=None,
-    hotspots_password=None,
-    hotspots_resolution=None,
-    hotspots_maxpoints=None,
-    hotspots_translate=None,
-    hotspots_probclip=None,
     **args,
 ):
     """
