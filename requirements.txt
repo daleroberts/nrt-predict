@@ -1,0 +1,7 @@
+pytest
+joblib
+numpy
+psutil 
+requests
+pyyaml
+scikit-image
