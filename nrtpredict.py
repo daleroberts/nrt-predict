@@ -424,6 +424,7 @@ def run(
     inputs=None,
     tmpdir=None,
     models=None,
+    driver=None,
     **args,
 ):
     """
@@ -450,7 +451,7 @@ def run(
     # TODO: Option to scale?
 
     log(f"Creating {obstmp}")
-    driver = gdal.GetDriverByName("GTiff")
+    driver = gdal.GetDriverByName(driver)
     fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
     fd.SetGeoTransform(geo)
     fd.SetProjection(prj)
@@ -681,7 +682,10 @@ def check_config(args):
                 errors = True
  
         if "driver" not in m:
-            m["driver"] = "GTiff"
+            if gdal.GetDriverByName("COG"):
+                m["driver"] = "COG"
+            else:
+                m["driver"] = "GTiff"
 
         if m["driver"] not in avail:
             log(f"'driver' for model '{name}' is not available")
