@@ -24,10 +24,19 @@ class Model:
         if len(result.shape) == 2:
             result = result[:, :, np.newaxis]
 
-        driver = gdal.GetDriverByName(self.driver)
+        driver = self.driver
+
+        make_cog = False
+        if driver == "COG":
+            make_cog = True
+            ofn = fn
+            fn = '/vsimem/tmp.tif'
+            driver = "GTiff"
+
+        do = gdal.GetDriverByName(driver)
         dtype = DTYPEMAP[result.dtype.name]
 
-        fd = driver.Create(fn, result.shape[1], result.shape[0],
+        fd = do.Create(fn, result.shape[1], result.shape[0],
                            result.shape[2], dtype)
 
         fd.SetGeoTransform(self.geo)
@@ -38,7 +47,10 @@ class Model:
             ob.WriteArray(result[:, :, i])
             ob.SetNoDataValue(0)
 
-        del fd
+        if make_cog:
+            ds = gdal.GetDriverByName('COG').CreateCopy(ofn, fd)
+            gdal.Unlink(fn)
+            del fd
 
 
 class NoOp(Model):

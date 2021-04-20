@@ -47,6 +47,7 @@ models:
 
    - name: NoOp
      output: obs.tif
+     driver: COG
 
    - name: GeomedianDiffSingle
      output: diff.tif

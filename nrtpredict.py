@@ -424,7 +424,6 @@ def run(
     inputs=None,
     tmpdir=None,
     models=None,
-    driver=None,
     **args,
 ):
     """
@@ -450,17 +449,17 @@ def run(
 
     # TODO: Option to scale?
 
-    log(f"Creating {obstmp}")
-    driver = gdal.GetDriverByName(driver)
-    fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
-    fd.SetGeoTransform(geo)
-    fd.SetProjection(prj)
-    for i in range(fd.RasterCount):
-        ob = fd.GetRasterBand(i + 1)
-        ob.WriteArray(obsdata[:, :, i])
-        ob.SetNoDataValue(0)
-        ob.SetDescription(f"S2-{BANDS[i]}")
-    del fd
+    #log(f"Creating {obstmp}")
+    #driver = gdal.GetDriverByName("GeoTiff")
+    #fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
+    #fd.SetGeoTransform(geo)
+    #fd.SetProjection(prj)
+    #for i in range(fd.RasterCount):
+    #    ob = fd.GetRasterBand(i + 1)
+    #    ob.WriteArray(obsdata[:, :, i])
+    #    ob.SetNoDataValue(0)
+    #    ob.SetDescription(f"S2-{BANDS[i]}")
+    #del fd
 
     log(f"# Preparing ancillary data")
 
@@ -544,6 +543,7 @@ def run(
 
         name = m.pop("name")
         outfn = m.pop("output")
+        driver = m.pop("driver")
         inputs = m.pop("inputs")
 
         log(f"# Model: {name}")
@@ -554,6 +554,7 @@ def run(
         m['prj'] = prj
         m['xsize'] = xsize
         m['ysize'] = ysize
+        m['driver'] = driver
 
         try:
 
