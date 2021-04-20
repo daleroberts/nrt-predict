@@ -31,7 +31,7 @@ gdal.UseExceptions()
 ogr.UseExceptions()
 osr.UseExceptions()
 
-gdal.PushErrorHandler('CPLQuietErrorHandler')
+gdal.PushErrorHandler("CPLQuietErrorHandler")
 
 MODELDIR = "models"
 
@@ -60,6 +60,83 @@ class ConnectionError(IOError):
     Raised if the data cannot be found or accessed.
     """
 
+class Source:
+
+    def __init__(self):
+        pass
+
+    def get_observations(self, url):
+        raise NotImplementedError
+
+class DEALandsat(Source):
+
+    def get_observations(self, url):
+        pass
+
+class DEASentinel2(Source):
+
+    def get_observations(self, url, product="NBAR", onlymask=False, **args):
+        """
+        Get the NRT observation from the S3 or public (HTTP) bucket and load the
+        data into memory in a numpy array of shape (ysize, xsize, nbands). This is
+        assuming the DEA package format.
+        """
+        pkg = parse_pkg(url)
+
+        if url.startswith("/vsis3"):
+            stripped_url = url.replace("/vsis3/dea-public-data", "https://data.dea.ga.gov.au")
+        elif url.startswith("/vsicurl"):
+            stripped_url = url.replace("/vsicurl/", "")
+        else:
+            stripped_url = url
+
+        fn = f"{url}/QA/{pkg}_FMASK.TIF"
+        fd = gdal.Open(fn)
+        mask = fd.ReadAsArray()
+
+        # TODO: use these stats to throw exception if the observation is too cloudy?
+
+        pnodata = np.count_nonzero(mask == 0) / np.prod(mask.shape)
+        pclear = np.count_nonzero(mask == 1) / np.prod(mask.shape)
+
+        log(f"Package:   {pkg}")
+        log(f"Thumbnail: {stripped_url}/{product}/{product}_THUMBNAIL.JPG")
+        log(f"Location:  {stripped_url}/map.html")
+        log(f"Pixels:    {mask.shape[0]} x {mask.shape[1]}")
+        log(f"Clear %:   {pclear:.4f}")
+
+        geo = fd.GetGeoTransform()
+        prj = fd.GetProjection()
+
+        ysize = mask.shape[0]
+        xsize = mask.shape[1]
+
+        if onlymask:
+            return (geo, prj, mask[:, :, np.newaxis])
+
+        log("# Loading data")
+
+        hc = checksum_array(mask)
+        log(f"Band MASK (sha256:{hc})")
+
+        # Load other bands
+
+        data = np.empty((ysize, xsize, len(BANDS)), dtype=np.float32)
+        for i, band in enumerate(BANDS):
+            fn = f"{url}/{product}/{product}_{band}.TIF"
+            fd = gdal.Open(fn)
+            fd.ReadAsArray(buf_obj=data[:, :, i], buf_ysize=ysize, buf_xsize=xsize)
+            hc = checksum_array(data[:, :, i])
+            log(f"Band {band}  (sha256:{hc})")
+
+        # TODO: set in config?
+
+        data /= 10000
+        data[mask == 0] = np.nan
+
+        log(f"data shape: {data.shape}")
+
+        return (geo, prj, data)
 
 def get_s3_client():
     """
@@ -69,7 +146,7 @@ def get_s3_client():
     from botocore import UNSIGNED
     from botocore.client import Config
 
-    return boto3.client('s3', config=Config(signature_version=UNSIGNED))
+    return boto3.client("s3", config=Config(signature_version=UNSIGNED))
 
 
 def checksum_array(arr):
@@ -80,7 +157,8 @@ def checksum_array(arr):
     hasher.update(arr.tobytes())
     return hasher.hexdigest()
 
-def checksum_file(f, blocksize=2<<15):
+
+def checksum_file(f, blocksize=2 << 15):
     """
     Checksum a file-like object.
     """
@@ -90,7 +168,8 @@ def checksum_file(f, blocksize=2<<15):
     f.seek(0)
     return hasher.hexdigest()
 
-def check_checksum(f, checksum, blocksize=2<<15):
+
+def check_checksum(f, checksum, blocksize=2 << 15):
     """
     Check that the SHA256 checksum of a file-type object matches the 'checksum'. Raises
     an 'IncorrectChecksumError' if they don't match.
@@ -98,7 +177,7 @@ def check_checksum(f, checksum, blocksize=2<<15):
     Checksums can be generated on the command line with:
 
       % shasum -a 256 filename
-    
+
     """
     actual = checksum_file(f)
 
@@ -109,9 +188,10 @@ def check_checksum(f, checksum, blocksize=2<<15):
         raise IncorrectChecksumError()
 
     log("Checksum matches.")
-        
 
-#TODO: path@sha256:123123 format?
+
+# TODO: path@sha256:123123 format?
+
 
 def get_model(name, **args):
     """
@@ -122,12 +202,12 @@ def get_model(name, **args):
     s3 bucket.
     """
     # Handle case where name is a path a pickled model on disk
-    
+
     if name[:7] == "file://":
         path = name[7:]
         path, checksum = path.split(":")
         log(f"Loading model from '{path}'")
-        with open(path, 'rb') as df:
+        with open(path, "rb") as df:
             f = BytesIO(df.read())
             check_checksum(f, checksum)
             f.seek(0)
@@ -135,11 +215,11 @@ def get_model(name, **args):
             model.update(**args)
 
     # Handle model stored in a s3 bucket
-    
+
     elif name[:5] == "s3://":
         log(f"Loading model from '{name}'")
-        bucket, key = name.split('/')[2], name.split('/')[3:]
-        key = '/'.join(key)
+        bucket, key = name.split("/")[2], name.split("/")[3:]
+        key = "/".join(key)
         with BytesIO() as f:
             s3 = get_s3_client()
             s3.download_fileobj(Bucket=bucket, Key=key, Fileobj=f)
@@ -176,7 +256,7 @@ def normalise_url(url):
         raise URLParsingError(f"Cannot parse the URL {url}: {e}")
 
     if p.scheme == "s3":
-        url = url.replace("s3://","/vsis3/")
+        url = url.replace("s3://", "/vsis3/")
     elif p.scheme == "http":
         url = f"/vsicurl/{url}"
     elif p.scheme == "https":
@@ -195,7 +275,7 @@ def listfmt(lst):
     """
     Format a list as a str with 4 decimal places of accuracy.
     """
-    return '(' + ', '.join([f'{x:.4f}' for x in lst]) + ')'
+    return "(" + ", ".join([f"{x:.4f}" for x in lst]) + ")"
 
 
 def wktfmt(wkt):
@@ -255,7 +335,7 @@ def parse_obsdate(url):
     Parse observation date from url.
     """
     pkg = parse_pkg(url)
-    return datetime.strptime(pkg.split('_')[6], "%Y%m%dT%H%M%S")
+    return datetime.strptime(pkg.split("_")[6], "%Y%m%dT%H%M%S")
 
 
 def get_bounds(url, **args):
@@ -271,10 +351,10 @@ def get_bounds(url, **args):
         error = gdal.GetLastErrorMsg()
         raise ConnectionError(error)
 
-    #req = requests.get(fn.replace('/vsicurl/', ''))
-    #fn = "/vsimem/bounds.geojson"
-    #gdal.FileFromMemBuffer(fn, req.content)
-    #fd = ogr.Open(fn)
+    # req = requests.get(fn.replace('/vsicurl/', ''))
+    # fn = "/vsimem/bounds.geojson"
+    # gdal.FileFromMemBuffer(fn, req.content)
+    # fd = ogr.Open(fn)
 
     layer = fd.GetLayer()
     ftr = layer.GetFeature(0)
@@ -282,102 +362,24 @@ def get_bounds(url, **args):
     return poly.ExportToWkt()
 
 
-def get_observation(url, product="NBAR", onlymask=False, **args):
-    """
-    Get the NRT observation from the S3 or public (HTTP) bucket and load the
-    data into memory in a numpy array of shape (ysize, xsize, nbands). This is
-    assuming the DEA package format.
-    """
-
-    pkg = parse_pkg(url)
-
-    if url.startswith('/vsis3'):
-        stripped_url = url.replace('/vsis3/dea-public-data', 'https://data.dea.ga.gov.au')
-    elif url.startswith('/vsicurl'):
-        stripped_url = url.replace('/vsicurl/', '')
-    else:
-        stripped_url = url
-
-    fn = f"{url}/QA/{pkg}_FMASK.TIF"
-    fd = gdal.Open(fn)
-    mask = fd.ReadAsArray()
-
-    # TODO: use these stats to throw exception if the observation is too cloudy?
-    
-    pnodata = np.count_nonzero(mask == 0) / np.prod(mask.shape)
-    pclear = np.count_nonzero(mask == 1) / np.prod(mask.shape)
-
-    log(f"Package:   {pkg}")
-    log(f"Thumbnail: {stripped_url}/{product}/{product}_THUMBNAIL.JPG")
-    log(f"Location:  {stripped_url}/map.html")
-    log(f"Pixels:    {mask.shape[0]} x {mask.shape[1]}")
-    log(f"Clear %:   {pclear:.4f}")
-
-
-    geo = fd.GetGeoTransform()
-    prj = fd.GetProjection()
-
-    ysize = mask.shape[0]
-    xsize = mask.shape[1]
-
-    if onlymask:
-        return (geo, prj, mask[:,:,np.newaxis])
-
-    log("# Loading data")
-
-    hc = checksum_array(mask)
-    log(f"Band MASK (sha256:{hc})")
-
-    # Load other bands
-
-    data = np.empty((ysize, xsize, len(BANDS)), dtype=np.float32)
-    for i, band in enumerate(BANDS):
-        fn = f"{url}/{product}/{product}_{band}.TIF"
-        fd = gdal.Open(fn)
-        fd.ReadAsArray(buf_obj=data[:, :, i], buf_ysize=ysize, buf_xsize=xsize)
-        hc = checksum_array(data[:,:,i])
-        log(f"Band {band}  (sha256:{hc})")
-
-    # TODO: set in config?
-
-    data /= 10000
-    data[mask == 0] = np.nan
-
-    log(f"data shape: {data.shape}")
-
-    return (geo, prj, data)
-
 
 def polygon_from_geobox(geo, xsize, ysize):
     """
     Generate a polygon from a geobox and the number of pixels.
     """
     poly = ogr.Geometry(ogr.wkbPolygon)
-
-    px = np.empty(5, dtype=np.float64)
-    py = np.empty(5, dtype=np.float64)
-
-    px[0] = geo[0] + 0 * geo[1] + 0 * geo[2]
-    py[0] = geo[3] + 0 * geo[4] + 0 * geo[5]
-
-    px[1] = geo[0] + xsize * geo[1] + 0 * geo[2]
-    py[1] = geo[3] + xsize * geo[4] + 0 * geo[5]
-
-    px[2] = geo[0] + xsize * geo[1] + ysize * geo[2]
-    py[2] = geo[3] + 0 * geo[4] + ysize * geo[5]
-
-    px[3] = geo[0] + 0 * geo[1] + ysize * geo[2]
-    py[3] = geo[3] + 0 * geo[4] + ysize * geo[5]
-
-    px[4] = geo[0] + 0 * geo[1] + 0 * geo[2]
-    py[4] = geo[3] + 0 * geo[4] + 0 * geo[5]
-
     ring = ogr.Geometry(ogr.wkbLinearRing)
-    for i in range(5):
-        ring.AddPoint(px[i], py[i])
-
+    ring.AddPoint(geo[0] + 0 * geo[1] + 0 * geo[2],
+                  geo[3] + 0 * geo[4] + 0 * geo[5])
+    ring.AddPoint(geo[0] + xsize * geo[1] + 0 * geo[2],
+                  geo[3] + xsize * geo[4] + 0 * geo[5])
+    ring.AddPoint(geo[0] + xsize * geo[1] + ysize * geo[2],
+                  geo[3] + 0 * geo[4] + ysize * geo[5])
+    ring.AddPoint(geo[0] + 0 * geo[1] + ysize * geo[2],
+                  geo[3] + 0 * geo[4] + ysize * geo[5])
+    ring.AddPoint(geo[0] + 0 * geo[1] + 0 * geo[2],
+                  geo[3] + 0 * geo[4] + 0 * geo[5])
     poly.AddGeometry(ring)
-
     return poly
 
 
@@ -443,23 +445,13 @@ def run(
     log(f"Obs. Date: {obsdate}")
     log(f"Obs. WKT:  {wktfmt(obswkt)}")
 
-    geo, prj, obsdata = get_observation(url)
+    source = DEASentinel2()
+
+    geo, prj, obsdata = source.get_observations(url)
 
     ysize, xsize, psize = obsdata.shape
 
     # TODO: Option to scale?
-
-    #log(f"Creating {obstmp}")
-    #driver = gdal.GetDriverByName("GeoTiff")
-    #fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
-    #fd.SetGeoTransform(geo)
-    #fd.SetProjection(prj)
-    #for i in range(fd.RasterCount):
-    #    ob = fd.GetRasterBand(i + 1)
-    #    ob.WriteArray(obsdata[:, :, i])
-    #    ob.SetNoDataValue(0)
-    #    ob.SetDescription(f"S2-{BANDS[i]}")
-    #del fd
 
     log(f"# Preparing ancillary data")
 
@@ -472,18 +464,18 @@ def run(
 
         log(f"Checking {name}")
 
-        output = model['output']
+        output = model["output"]
 
-        ips = model['inputs']
+        ips = model["inputs"]
         for ip in ips:
-            fn = ip['filename']
+            fn = ip["filename"]
             if fn not in outputs:
                 inputs.append(fn)
 
         outputs.append(output)
 
-    #log(f"Removing {obstmp}")
-    #gdal.Unlink(obstmp)
+    # log(f"Removing {obstmp}")
+    # gdal.Unlink(obstmp)
 
     # TODO: Option for multiple reference images?
 
@@ -500,7 +492,7 @@ def run(
 
         if not clipshpfn.startswith("/vsimem"):
             log(f"Saving clipping area to disk as '{clipshpfn}'")
-            log(f"Proj: {prj}") 
+            log(f"Proj: {prj}")
     else:
         log(f"No ancillary datasets are required!")
 
@@ -538,7 +530,7 @@ def run(
 
     # TODO: make this changeable
     # TODO: list of models, different outputs for each one so they can be chained?
-    
+
     for m in models:
 
         name = m.pop("name")
@@ -548,13 +540,14 @@ def run(
 
         log(f"# Model: {name}")
 
-        m['obswkt'] = obswkt
-        m['obsdate'] = obsdate
-        m['geo'] = geo
-        m['prj'] = prj
-        m['xsize'] = xsize
-        m['ysize'] = ysize
-        m['driver'] = driver
+        m["obswkt"] = obswkt
+        m["obsdate"] = obsdate
+        m["geo"] = geo
+        m["prj"] = prj
+        m["xsize"] = xsize
+        m["ysize"] = ysize
+        m["driver"] = driver
+        m["bands"] = BANDS
 
         try:
 
@@ -566,14 +559,14 @@ def run(
 
         # Prepare all the appropriate ancillary data sets and pass the
         # observation data as the last one in the list.
-        
+
         datas = []
         for ip in inputs:
 
-            fn = ip['filename']
+            fn = ip["filename"]
             data = datamap[fn].copy()
 
-            #TODO: scale, etc?
+            # TODO: scale, etc?
 
             datas.append(data)
 
@@ -601,7 +594,7 @@ def astuple(v):
     as floats.
     """
     if isinstance(v, str):
-        return tuple([float(x) for x in v[1:-1].split(',')])
+        return tuple([float(x) for x in v[1:-1].split(",")])
     else:
         return tuple(v)
 
@@ -623,7 +616,7 @@ def check_config(args):
         ("clipshpfn", "/tmp/clip.json"),
         ("tmpdir", "/tmp"),
         ("gdalconfig", {}),
-        ("models", [])
+        ("models", []),
     ]
 
     for arg, value in defaults:
@@ -632,20 +625,19 @@ def check_config(args):
             args[arg] = value
 
     # Set GDAL config
-    
-    for k,v in args['gdalconfig'].items():
-        if v == True:
-            v = 'YES'
-        if v == False:
-            v = 'NO'
-        gdal.SetConfigOption(k, v)
-        log(f'GDAL option {k} = {v}')
 
+    for k, v in args["gdalconfig"].items():
+        if v == True:
+            v = "YES"
+        if v == False:
+            v = "NO"
+        gdal.SetConfigOption(k, v)
+        log(f"GDAL option {k} = {v}")
 
     ## Check that models exists
 
-    #nonnull = ["models"]
-    #for s in nonnull:
+    # nonnull = ["models"]
+    # for s in nonnull:
     #    if not s in args:
     #        warning(f"error: '{s}' should be set in the configuration.")
     #        errors = True
@@ -654,15 +646,14 @@ def check_config(args):
         log("'models' must be a list of models")
         errors = True
 
-
     # Set some model defaults
-    
+
     avail = [gdal.GetDriver(i).ShortName for i in range(gdal.GetDriverCount())]
 
     # Check the models
 
     models = args["models"]
-    for m in models: 
+    for m in models:
 
         name = m["name"]
 
@@ -673,7 +664,7 @@ def check_config(args):
             except ValueError:
                 log(f"Incorrect model name format, it should be file://filename:sha256checksum")
                 errors = True
-            
+
         if name[:5] == "s3://":
             try:
                 path = name[5:]
@@ -681,7 +672,7 @@ def check_config(args):
             except ValueError:
                 log(f"Incorrect model name format, it should be s3://bucket/key:sha256checksum")
                 errors = True
- 
+
         if "driver" not in m:
             if gdal.GetDriverByName("COG"):
                 m["driver"] = "COG"
@@ -697,14 +688,14 @@ def check_config(args):
             m["inputs"] = []
 
         # Normalise the urls
-        
+
         for ip in m["inputs"]:
-            fn = normalise_url(ip['filename'])
+            fn = normalise_url(ip["filename"])
             ip["filename"] = fn
- 
+
         # Check existence of input files
-    
-        #for ip in m["inputs"]:
+
+        # for ip in m["inputs"]:
         #    fn = ip['filename']
         #    try:
         #        fd = gdal.Open(fn)
@@ -715,11 +706,11 @@ def check_config(args):
         #        fd = None
 
         # Parse tuples as tuples of numbers for models
-        
-        for k,v in m.items():
+
+        for k, v in m.items():
             if isinstance(v, dict):
-                for kk,vv in v.items():
-                    if isinstance(vv, str) and vv.startswith('(') and vv.endswith(')'):
+                for kk, vv in v.items():
+                    if isinstance(vv, str) and vv.startswith("(") and vv.endswith(")"):
                         v[kk] = astuple(vv)
 
     args["models"] = models
@@ -728,7 +719,7 @@ def check_config(args):
         sys.exit(1)
 
     # TODO: Check GPU resources if needed?
-    
+
     return args
 
 
@@ -742,7 +733,7 @@ def cli_entry(url=None, **kwargs):
     if url is None:
         parser.add_argument("url")
 
-    parser.add_argument("-config", default="nrtpredict.yaml", metavar=('yamlfile'))
+    parser.add_argument("-config", default="nrtpredict.yaml", metavar=("yamlfile"))
 
     # ...
 
@@ -772,8 +763,8 @@ def cli_entry(url=None, **kwargs):
         warning("\nContinuing without configuration file...")
 
     # Overwrite based on what is passed to main
-    
-    for k,v in kwargs.items():
+
+    for k, v in kwargs.items():
         args[k] = v
 
     # Run this thing
