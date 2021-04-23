@@ -9,8 +9,13 @@ import os
 
 from nrtpredict import checksum_file
 
+def test_import_models():
+    from nrtmodels import NoOp
+    model = NoOp()
+
+
 def test_serialise_model_pickle(tmp_path):
-    from models import NoOp
+    from nrtmodels import NoOp
     model_path = tmp_path / "model.pkl"
 
     model = NoOp()

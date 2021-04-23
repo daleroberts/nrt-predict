@@ -49,10 +49,10 @@ models:
      output: obs.tif
      driver: COG
 
-   - name: GeomedianDiffSingle
-     output: diff.tif
-     inputs:
-         - filename: clip.tif
+#   - name: GeomedianDiffSingle
+#     output: diff.tif
+#     inputs:
+#         - filename: clip.tif
 
 # Temporary directory. Allow environment variables in name
 # e.g., $HOME or $PBS_JOBFS

@@ -22,7 +22,7 @@ import re
 from osgeo import gdal, ogr, osr
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
-from urllib.request import urlopen, URLError
+from urllib.request import urlopen
 from pydoc import locate
 from uuid import uuid4
 from io import BytesIO
@@ -33,7 +33,7 @@ osr.UseExceptions()
 
 gdal.PushErrorHandler("CPLQuietErrorHandler")
 
-MODELDIR = "models"
+MODELDIR = "nrtmodels"
 
 BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
 
@@ -60,21 +60,18 @@ class ConnectionError(IOError):
     Raised if the data cannot be found or accessed.
     """
 
+
 class Source:
-
-    def __init__(self):
-        pass
-
     def get_observations(self, url):
         raise NotImplementedError
 
-class DEALandsat(Source):
 
+class DEALandsat(Source):
     def get_observations(self, url):
         pass
 
-class DEASentinel2(Source):
 
+class DEASentinel2(Source):
     def get_observations(self, url, product="NBAR", onlymask=False, **args):
         """
         Get the NRT observation from the S3 or public (HTTP) bucket and load the
@@ -137,6 +134,93 @@ class DEASentinel2(Source):
         log(f"data shape: {data.shape}")
 
         return (geo, prj, data)
+
+
+class DEASentinel2Split(Source):
+    def __init__(self):
+        self.bands = ["B02NW", "B02NE", "B02SW", "B02SE", "B03NW", "B03NE", "B03SW", "B03SE",
+                      "B04NW", "B04NE", "B04SW", "B04SE", "B05", "B06", "B07", "B08NW", "B08NE",
+                      "B08SW", "B08SE", "B8A", "B11", "B12"]
+
+        self.obands = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+
+    def get_observations(self, url, product="NBART", onlymask=False, **args):
+        """
+        Get the NRT observation from the S3 or public (HTTP) bucket and load the
+        data into memory in a numpy array of shape (ysize, xsize, nbands). This is
+        assuming the DEA package format.
+        """
+        pkg = parse_pkg(url)
+
+        if url.startswith("/vsis3"):
+            stripped_url = url.replace("/vsis3/dea-public-data", "https://data.dea.ga.gov.au")
+        elif url.startswith("/vsicurl"):
+            stripped_url = url.replace("/vsicurl/", "")
+        else:
+            stripped_url = url
+
+        fn = f"{url}/QA/{pkg}_FMASK.TIF"
+        fd = gdal.Open(fn)
+        mask = fd.ReadAsArray()
+
+        pnodata = np.count_nonzero(mask == 0) / np.prod(mask.shape)
+        pclear = np.count_nonzero(mask == 1) / np.prod(mask.shape)
+
+        log(f"Package:   {pkg}")
+        log(f"Thumbnail: {stripped_url}/{product}/{product}_THUMBNAIL.JPG")
+        log(f"Location:  {stripped_url}/map.html")
+        log(f"Clear %:   {pclear:.4f}")
+
+        geo = fd.GetGeoTransform()
+        prj = fd.GetProjection()
+
+        ysize, xsize = mask.shape
+
+        if onlymask:
+            return (geo, prj, mask[:, :, np.newaxis])
+
+        hc = checksum_array(mask)
+        log(f"Band MASK (sha256:{hc}) {mask.shape[0]} x {mask.shape[1]}")
+
+        data = np.empty((ysize, xsize, len(self.bands)), dtype=np.float32)
+        k = 0
+
+        for i, band in enumerate(self.obands):
+            fn = f"{url}/{product}/{product}_{band}.TIF"
+            fd = gdal.Open(fn)
+            bysize, bxsize = fd.RasterYSize, fd.RasterXSize
+
+            if (bysize == 2 * ysize) and (bxsize == 2 * xsize):
+                bdata = np.empty((bysize, bxsize), dtype=np.float32)
+                fd.ReadAsArray(buf_obj=bdata[:, :], buf_ysize=bysize, buf_xsize=bxsize)
+                
+                data[:,:,k] = bdata[0::2,0::2]
+                hc = checksum_array(data[:,:,k])
+                log(f"Band {band}NW (sha256:{hc}) {ysize} x {xsize}")
+                k = k + 1                
+
+                data[:,:,k] = bdata[0::2,1::2]
+                hc = checksum_array(data[:,:,k])
+                log(f"Band {band}NE (sha256:{hc}) {ysize} x {xsize}")
+                k = k + 1                
+
+                data[:,:,k] = bdata[1::2,0::2]
+                hc = checksum_array(data[:,:,k])
+                log(f"Band {band}SW (sha256:{hc}) {ysize} x {xsize}")
+                k = k + 1                
+
+                data[:,:,k] = bdata[1::2,1::2]
+                hc = checksum_array(data[:,:,k])
+                log(f"Band {band}SE (sha256:{hc}) {ysize} x {xsize}")
+                k = k + 1                
+            else:
+                fd.ReadAsArray(buf_obj=data[:, :,k], buf_ysize=ysize, buf_xsize=xsize)
+                hc = checksum_array(data[:,:,k])
+                log(f"Band {band}  (sha256:{hc}) {ysize} x {xsize}")
+                k = k + 1
+
+        return (geo, prj, data)
+
 
 def get_s3_client():
     """
@@ -362,23 +446,17 @@ def get_bounds(url, **args):
     return poly.ExportToWkt()
 
 
-
 def polygon_from_geobox(geo, xsize, ysize):
     """
     Generate a polygon from a geobox and the number of pixels.
     """
     poly = ogr.Geometry(ogr.wkbPolygon)
     ring = ogr.Geometry(ogr.wkbLinearRing)
-    ring.AddPoint(geo[0] + 0 * geo[1] + 0 * geo[2],
-                  geo[3] + 0 * geo[4] + 0 * geo[5])
-    ring.AddPoint(geo[0] + xsize * geo[1] + 0 * geo[2],
-                  geo[3] + xsize * geo[4] + 0 * geo[5])
-    ring.AddPoint(geo[0] + xsize * geo[1] + ysize * geo[2],
-                  geo[3] + 0 * geo[4] + ysize * geo[5])
-    ring.AddPoint(geo[0] + 0 * geo[1] + ysize * geo[2],
-                  geo[3] + 0 * geo[4] + ysize * geo[5])
-    ring.AddPoint(geo[0] + 0 * geo[1] + 0 * geo[2],
-                  geo[3] + 0 * geo[4] + 0 * geo[5])
+    ring.AddPoint(geo[0] + 0 * geo[1] + 0 * geo[2], geo[3] + 0 * geo[4] + 0 * geo[5])
+    ring.AddPoint(geo[0] + xsize * geo[1] + 0 * geo[2], geo[3] + xsize * geo[4] + 0 * geo[5])
+    ring.AddPoint(geo[0] + xsize * geo[1] + ysize * geo[2], geo[3] + 0 * geo[4] + ysize * geo[5])
+    ring.AddPoint(geo[0] + 0 * geo[1] + ysize * geo[2], geo[3] + 0 * geo[4] + ysize * geo[5])
+    ring.AddPoint(geo[0] + 0 * geo[1] + 0 * geo[2], geo[3] + 0 * geo[4] + 0 * geo[5])
     poly.AddGeometry(ring)
     return poly
 
@@ -445,13 +523,9 @@ def run(
     log(f"Obs. Date: {obsdate}")
     log(f"Obs. WKT:  {wktfmt(obswkt)}")
 
-    source = DEASentinel2()
+    source = DEASentinel2Split()
 
     geo, prj, obsdata = source.get_observations(url)
-
-    ysize, xsize, psize = obsdata.shape
-
-    # TODO: Option to scale?
 
     log(f"# Preparing ancillary data")
 
@@ -473,11 +547,6 @@ def run(
                 inputs.append(fn)
 
         outputs.append(output)
-
-    # log(f"Removing {obstmp}")
-    # gdal.Unlink(obstmp)
-
-    # TODO: Option for multiple reference images?
 
     log(f"# Warping and clipping ancillary data")
 
@@ -506,17 +575,36 @@ def run(
 
         nbands = fd.RasterCount
         nodata = fd.GetRasterBand(1).GetNoDataValue()
-        data = np.empty((ysize, xsize, nbands), dtype=np.float32)
-        for i in range(nbands):
-            band = fd.GetRasterBand(i + 1)
-            band.ReadAsArray(
-                buf_type=gdal.GDT_Float32,
-                buf_xsize=xsize,
-                buf_ysize=ysize,
-                buf_obj=data[:, :, i],
-            )
 
-        data[data == nodata] = np.nan
+        if isinstance(obsdata, list) and nbands == len(obsdata):
+            args = []
+            bands = source.bands
+            for i, obs in enumerate(obsdata):
+                ysize, xsize = obs.shape
+                data = np.empty((ysize, xsize), dtype=np.float32)
+
+                rb = fd.GetRasterBand(i + 1)
+                rb.ReadAsArray(
+                    buf_type=gdal.GDT_Float32,
+                    buf_xsize=xsize,
+                    buf_ysize=ysize,
+                    buf_obj=data[:, :],
+                    resample_alg=gdal.GRIORA_NearestNeighbour,
+                )
+                hc = checksum_array(data)
+                log(f"Band {bands[i]}  (sha256:{hc}) {ysize} x {xsize}")
+                data[data == nodata] = np.nan
+        else:
+            data = np.empty((ysize, xsize, nbands), dtype=np.float32)
+            for i in range(nbands):
+                band = fd.GetRasterBand(i + 1)
+                band.ReadAsArray(
+                    buf_type=gdal.GDT_Float32,
+                    buf_xsize=xsize,
+                    buf_ysize=ysize,
+                    buf_obj=data[:, :, i],
+                )
+            data[data == nodata] = np.nan
 
         nnan = np.count_nonzero(np.isnan(data))
         nval = xsize * ysize * nbands
@@ -544,10 +632,10 @@ def run(
         m["obsdate"] = obsdate
         m["geo"] = geo
         m["prj"] = prj
-        m["xsize"] = xsize
-        m["ysize"] = ysize
+        #        m["xsize"] = xsize
+        #        m["ysize"] = ysize
         m["driver"] = driver
-        m["bands"] = BANDS
+        m["bands"] = source.bands
 
         try:
 
@@ -560,7 +648,7 @@ def run(
         # Prepare all the appropriate ancillary data sets and pass the
         # observation data as the last one in the list.
 
-        datas = []
+        args = []
         for ip in inputs:
 
             fn = ip["filename"]
@@ -568,9 +656,9 @@ def run(
 
             # TODO: scale, etc?
 
-            datas.append(data)
+            args.append(data)
 
-        datas.append(obsdata.copy())
+        args.append(obsdata)
 
         # The model is responsible for saving its prediction to disk (or memory
         # using /vsimem) as it is best placed to make a decision on the format, etc.
@@ -579,7 +667,7 @@ def run(
 
         try:
 
-            model.predict_and_save(outfn, *datas)
+            model.predict_and_save(outfn, *args)
 
         except Exception as e:
             traceback = e.__traceback__

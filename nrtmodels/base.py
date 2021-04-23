@@ -46,6 +46,7 @@ class Model:
             ob = fd.GetRasterBand(i + 1)
             ob.WriteArray(result[:, :, i])
             ob.SetNoDataValue(0)
+            ob.SetDescription(self.bands[i])
 
         if make_cog:
             ds = gdal.GetDriverByName('COG').CreateCopy(ofn, fd)
@@ -56,4 +57,7 @@ class Model:
 class NoOp(Model):
 
     def predict(self, data):
-        return data
+        if isinstance(data, list):
+                return np.dstack(data)
+        else:
+            return data
