@@ -187,9 +187,15 @@ class UnsupervisedBurnscarDetect2(Model):
 
         bX[mask] = 0
         
-        #TODO: parametrise
+        #TODO: Parameterise
         blobs = feature.blob_doh(bX, min_sigma=5, max_sigma=30, overlap=0.9, threshold=0.008)
         
+        focus = np.zeros_like(bX, dtype=bool)
+        for blob in blobs:
+            y, x, r = blob
+            rr, cc = draw.disk((y, x), r * 5, shape=focus.shape)
+            focus[rr, cc] = True
+            
         outliers = np.zeros_like(bX, dtype=np.int8)
         
         self.log(f"blobs: {blobs.shape[0]}")
@@ -197,7 +203,7 @@ class UnsupervisedBurnscarDetect2(Model):
         if blobs.shape[0] == 0:
             return outliers
             
-        #TODO: parametrise
+        #TODO: Parameterise radius
 
         for blob in blobs:
             y, x, r = blob
@@ -212,20 +218,20 @@ class UnsupervisedBurnscarDetect2(Model):
         outliers[mask] = 0
                     
         nunknown = np.count_nonzero(outliers == -1)
-        ntotal = X.shape[0] * X.shape[1]
+        ntotal = np.count_nonzero(focus)
         
         self.log(f"spreading: {nunknown} / {ntotal} ({nunknown / ntotal:.4f})")
         
-        y = outliers.reshape((-1,))
-        X = X.reshape((-1, X.shape[-1]))
+        y = outliers[focus].reshape((-1,))
+        X = X[focus].reshape((-1, X.shape[-1]))
 
-        #TODO: parametrise
+        #TODO: Parametrise
         lblspread = semi_supervised.LabelSpreading(kernel="knn", alpha=0.8, max_iter=100, n_neighbors=20, n_jobs=1)
         lblspread.fit(X, y)
         
         self.log(f"iters: {lblspread.n_iter_}")
 
-        outliers = lblspread.transduction_
+        outliers[focus] = lblspread.transduction_
         outliers = outliers.reshape(bX.shape)
         
         return outliers
