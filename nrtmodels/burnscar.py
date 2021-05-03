@@ -144,3 +144,88 @@ class UnsupervisedBurnscarDetect1(Model):
         burnscars[cloud] = 0
         
         return burnscars
+
+
+class UnsupervisedBurnscarDetect2(Model):
+    """
+    Unsupervised Burn Scar Detection - Model 2
+    
+    This is a simple unsupervised algorithm for detecting burn
+    scars in NRT images.
+    
+    Developed by Dale Roberts <dale.o.roberts@gmail.com>
+    """
+    
+    def log(self, s):
+        print(s, file=sys.stderr)
+        
+    def _generate_features(self, pre, pst):
+        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
+        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
+        dnbr = pre_nbr - pst_nbr 
+
+        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0])
+        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0])
+        dbsi = pst_bsi - pre_bsi
+
+        pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
+        pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
+        dndvi = pre_ndvi - pst_ndvi
+
+        return np.dstack([dnbr, dbsi, dndvi])
+
+    def predict(self, mask, pre, pst):
+        from skimage import feature, draw, morphology
+        from sklearn import semi_supervised
+        
+        X = self._generate_features(pre, pst)
+        
+        bad = np.isnan(X)
+        X[bad] = 0
+        
+        bX = ((1 + X[:,:,0]) * (1 + X[:,:,1]) - 1).astype(np.float64)
+
+        bX[mask] = 0
+        
+        #TODO: parametrise
+        blobs = feature.blob_doh(bX, min_sigma=5, max_sigma=30, overlap=0.9, threshold=0.008)
+        
+        outliers = np.zeros_like(bX, dtype=np.int8)
+        
+        self.log(f"blobs: {blobs.shape[0]}")
+
+        if blobs.shape[0] == 0:
+            return outliers
+            
+        #TODO: parametrise
+
+        for blob in blobs:
+            y, x, r = blob
+            rr, cc = draw.disk((y, x), r * 3, shape=outliers.shape)
+            outliers[rr, cc] = -1
+                        
+        for blob in blobs:
+            y, x, r = blob
+            rr, cc = draw.disk((y, x), r / 2, shape=outliers.shape)
+            outliers[rr, cc] = 1
+            
+        outliers[mask] = 0
+                    
+        nunknown = np.count_nonzero(outliers == -1)
+        ntotal = X.shape[0] * X.shape[1]
+        
+        self.log(f"spreading: {nunknown} / {ntotal} ({nunknown / ntotal:.4f})")
+        
+        y = outliers.reshape((-1,))
+        X = X.reshape((-1, X.shape[-1]))
+
+        #TODO: parametrise
+        lblspread = semi_supervised.LabelSpreading(kernel="knn", alpha=0.8, max_iter=100, n_neighbors=20, n_jobs=1)
+        lblspread.fit(X, y)
+        
+        self.log(f"iters: {lblspread.n_iter_}")
+
+        outliers = lblspread.transduction_
+        outliers = outliers.reshape(bX.shape)
+        
+        return outliers
