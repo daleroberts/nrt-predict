@@ -45,8 +45,8 @@ class Model:
         for i in range(fd.RasterCount):
             ob = fd.GetRasterBand(i + 1)
             ob.WriteArray(result[:, :, i])
-            ob.SetNoDataValue(0)
-            ob.SetDescription(self.bands[i])
+            ob.SetNoDataValue(np.nan)
+            #ob.SetDescription(self.description[i])
 
         if make_cog:
             ds = gdal.GetDriverByName('COG').CreateCopy(ofn, fd)
