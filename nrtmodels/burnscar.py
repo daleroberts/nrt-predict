@@ -298,9 +298,9 @@ class SupervisedBurnscarDetect1(Model):
         burns[mask] = 0
 
         from skimage import morphology
-        burns = morphology.binary_erosion(burns, morphology.diamond(3))
-        burns = morphology.binary_dilation(burns, morphology.diamond(6))
-        burns = morphology.convex_hull_object(burns)
-        burns = morphology.binary_erosion(burns, morphology.diamond(3))
+        burns = morphology.binary_erosion(burns, morphology.diamond(1))
+        #burns = morphology.binary_dilation(burns, morphology.diamond(6))
+        #burns = morphology.convex_hull_object(burns)
+        #burns = morphology.binary_erosion(burns, morphology.diamond(3))
 
         return burns
