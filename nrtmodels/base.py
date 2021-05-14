@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 
 from osgeo import gdal, ogr, osr
 
@@ -9,11 +10,16 @@ DTYPEMAP = {"float32": gdal.GDT_Float32,
 class Model:
 
     def __init__(self, **kwargs):
+        self.verbose = True
         self.update(**kwargs)
 
     def update(self, **kwargs):
         for k,v in kwargs.items():
             setattr(self, k, v)
+
+    def log(self, s):
+        if self.verbose:
+            print(s, file=sys.stderr)
 
     def predict(self, *datas):
         raise NotImplementedError

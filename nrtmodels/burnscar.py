@@ -1,9 +1,9 @@
 from .base import Model
 import numpy as np
+import sys
 
 
 class GeomedianNBR(Model):
-
     def predict(self, pre, pst):
         # NBR = (B08 - B11)/(B08 + B11)
         pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
@@ -13,7 +13,6 @@ class GeomedianNBR(Model):
 
 
 class GeomedianBSI(Model):
-
     def predict(self, pre, pst):
         # BSI = ((B11 + B04) - (B08 - B02)) / ((B11 + B04) + (B08 - B02))
         pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
@@ -27,7 +26,6 @@ class GeomedianBSI(Model):
 
 
 class GeomedianNDVI(Model):
-
     def predict(self, pre, pst):
         # NDVI = (B08 - B04)/(B08 + B04)
         pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
@@ -37,7 +35,6 @@ class GeomedianNDVI(Model):
 
 
 class GeomedianDiff(Model):
-
     def predict(self, pre, pst):
         pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
         pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
@@ -56,81 +53,96 @@ class GeomedianDiff(Model):
 
         return diff
 
+
 class UnsupervisedBurnscarDetect1(Model):
     """
     Unsupervised Burn Scar Detection - Model 1
-    
+
     This is a simple unsupervised algorithm for detecting burn
     scars in NRT images.
-    
+
     Developed by Dale Roberts <dale.o.roberts@gmail.com>
     """
-    
-    def log(self, s):
-        print(s, file=sys.stderr)
-        
-    def _generate_features(self, pre, pst):
 
-        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0])
-        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0])
+    def _generate_features(self, pre, pst):
+        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
+        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
+
+        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
+            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
+        )
+        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
+            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
+        )
 
         pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
         pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
 
-        return np.dstack([pst_bsi - pre_bsi, pre_ndvi - pst_ndvi])
+        return np.dstack([pst_bsi - pre_bsi, pre_ndvi - pst_ndvi, pre_nbr - pst_nbr])
 
     def predict(self, mask, pre, pst):
-        from sklearn.feature_extraction.image import extract_patches_2d, reconstruct_from_patches_2d
+        from sklearn.feature_extraction.image import (
+            extract_patches_2d,
+            reconstruct_from_patches_2d,
+        )
         from sklearn import decomposition, cluster
         from skimage import morphology
-        
+
         X = self._generate_features(pre, pst)
 
-        mu = np.nanmean(X, axis=(0,1))
-        mm = np.nanmedian(X, axis=(0,1))
-        pl, pu = np.nanpercentile(X, (2, 98), axis=(0,1))
+        mu = np.nanmean(X, axis=(0, 1))
+        mm = np.nanmedian(X, axis=(0, 1))
+        pl, pu = np.nanpercentile(X, (2, 98), axis=(0, 1))
         # TODO parameterise cutoffs
 
         self.log(f"mean: {mu}")
-        self.log(f"median: {mm}")    
+        self.log(f"median: {mm}")
         self.log(f"percentiles: {(pl, pu)}")
-        
-        #TODO: check mu and mm
+
+        # TODO: check mu and mm
 
         for i in range(X.shape[-1]):
-            np.clip(X[:,:,i], pl[i], pu[i], out=X[:,:,i])
+            np.clip(X[:, :, i], pl[i], pu[i], out=X[:, :, i])
 
         bad = np.isnan(X)
         X[bad] = 0
-        
+
         # TODO parameterise this
         pX = extract_patches_2d(X, (3, 3))
 
         oshp = pX.shape
-        
+
         pX = pX.reshape(pX.shape[0], -1)
 
         self.log(f"data shape: {pX.shape}")
-        
+
         # TODO parameterise this
-        pca = decomposition.PCA(n_components=5, svd_solver='randomized', whiten=True)
+        pca = decomposition.PCA(n_components=5, svd_solver="randomized", whiten=True)
         pX = pca.fit_transform(pX)
 
-        print(f"PCA variance: {pca.explained_variance_}")
+        self.log(f"PCA variance: {pca.explained_variance_}")
 
-        print(f"reduced shape: {pX.shape}")
+        self.log(f"reduced shape: {pX.shape}")
 
         lbls = cluster.KMeans(n_clusters=2).fit_predict(pX)
 
         y = np.empty(oshp[:3], dtype=np.int8)
 
         for i in range(lbls.shape[0]):
-            y[i,:,:] = lbls[i]
+            y[i, :, :] = lbls[i]
 
         img = reconstruct_from_patches_2d(y, X.shape[:2])
 
-        outclass = np.argmax([np.prod(1+np.mean(X[img==0], axis=0)), np.prod(1+np.mean(X[img==1], axis=0))])
-        
+        self.log(f"class 0: {np.median(X[img == 0], axis=0)}")
+        self.log(f"class 1: {np.median(X[img == 1], axis=0)}")
+
+        outclass = np.argmax(
+            [
+                np.prod(1 + np.median(X[img == 0], axis=0)),
+                np.prod(1 + np.median(X[img == 1], axis=0)),
+            ]
+        )
+
         self.log(f"outlier class: {outclass}")
 
         outlier = img == outclass
@@ -142,7 +154,7 @@ class UnsupervisedBurnscarDetect1(Model):
 
         burnscars = img == outclass
         burnscars[cloud] = 0
-        
+
         return burnscars
 
 
@@ -155,83 +167,90 @@ class UnsupervisedBurnscarDetect2(Model):
     
     Developed by Dale Roberts <dale.o.roberts@gmail.com>
     """
-    
-    def log(self, s):
-        print(s, file=sys.stderr)
-        
+
     def _generate_features(self, pre, pst):
         pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
         pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
-        dnbr = pre_nbr - pst_nbr 
+        dnbr = pre_nbr - pst_nbr
 
-        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0])
-        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0])
+        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
+            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
+        )
+        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
+            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
+        )
         dbsi = pst_bsi - pre_bsi
 
         pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
         pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
         dndvi = pre_ndvi - pst_ndvi
 
-        return np.dstack([dnbr, dbsi, dndvi])
+        return np.dstack([dnbr, dbsi, dndvi, -pst_ndvi])
 
     def predict(self, mask, pre, pst):
         from skimage import feature, draw, morphology
         from sklearn import semi_supervised
-        
+
         X = self._generate_features(pre, pst)
-        
+
         bad = np.isnan(X)
         X[bad] = 0
-        
-        bX = ((1 + X[:,:,0]) * (1 + X[:,:,1]) - 1).astype(np.float64)
+
+        bX = (X[:,:,0]>0)*((1 + X[:, :, 0]) * (1 + X[:, :, 1]) - 1).astype(np.float64)
+        #bX = ((1 + X[:, :, 0]) * (1 + X[:, :, 1]) - 1).astype(np.float64)
 
         bX[mask] = 0
-        
-        #TODO: Parameterise
-        blobs = feature.blob_doh(bX, min_sigma=5, max_sigma=30, overlap=0.9, threshold=0.008)
-        
+
+        # TODO: Parameterise
+        with np.errstate(all='ignore'):
+            blobs = feature.blob_doh(
+                bX, min_sigma=5, max_sigma=30, overlap=0.9, threshold=0.008
+            )
+
         focus = np.zeros_like(bX, dtype=bool)
         for blob in blobs:
             y, x, r = blob
             rr, cc = draw.disk((y, x), r * 5, shape=focus.shape)
             focus[rr, cc] = True
-            
+
         outliers = np.zeros_like(bX, dtype=np.int8)
-        
+
         self.log(f"blobs: {blobs.shape[0]}")
 
         if blobs.shape[0] == 0:
             return outliers
-            
-        #TODO: Parameterise radius
+
+        # TODO: Parameterise radius
 
         for blob in blobs:
             y, x, r = blob
             rr, cc = draw.disk((y, x), r * 3, shape=outliers.shape)
             outliers[rr, cc] = -1
-                        
+
         for blob in blobs:
             y, x, r = blob
             rr, cc = draw.disk((y, x), r / 2, shape=outliers.shape)
             outliers[rr, cc] = 1
-            
+
         outliers[mask] = 0
-                    
+
         nunknown = np.count_nonzero(outliers == -1)
         ntotal = np.count_nonzero(focus)
-        
+
         self.log(f"spreading: {nunknown} / {ntotal} ({nunknown / ntotal:.4f})")
-        
+
         y = outliers[focus].reshape((-1,))
         X = X[focus].reshape((-1, X.shape[-1]))
 
-        #TODO: Parametrise
-        lblspread = semi_supervised.LabelSpreading(kernel="knn", alpha=0.8, max_iter=100, n_neighbors=20, n_jobs=1)
+        # TODO: Parametrise
+        lblspread = semi_supervised.LabelSpreading(
+            kernel="knn", alpha=0.8, max_iter=100, n_neighbors=20, n_jobs=1
+        )
         lblspread.fit(X, y)
-        
+
         self.log(f"iters: {lblspread.n_iter_}")
 
         outliers[focus] = lblspread.transduction_
         outliers = outliers.reshape(bX.shape)
-        
+
         return outliers
