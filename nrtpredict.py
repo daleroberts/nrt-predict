@@ -72,6 +72,10 @@ class DEALandsat(Source):
 
 
 class DEASentinel2(Source):
+
+    def __init__(self):
+        self.bands = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+
     def get_observations(self, url, product="NBAR", onlymask=False, **args):
         """
         Get the NRT observation from the S3 or public (HTTP) bucket and load the
@@ -133,7 +137,7 @@ class DEASentinel2(Source):
 
         log(f"data shape: {data.shape}")
 
-        return (geo, prj, data)
+        return (geo, prj, data, mask != 1)
 
 
 class DEASentinel2Split(Source):
@@ -219,7 +223,7 @@ class DEASentinel2Split(Source):
                 log(f"Band {band}  (sha256:{hc}) {ysize} x {xsize}")
                 k = k + 1
 
-        return (geo, prj, data)
+        return (geo, prj, data, mask != 1)
 
 
 def get_s3_client():
@@ -523,11 +527,37 @@ def run(
     log(f"Obs. Date: {obsdate}")
     log(f"Obs. WKT:  {wktfmt(obswkt)}")
 
-    source = DEASentinel2Split()
+    source = DEASentinel2()
 
-    geo, prj, obsdata = source.get_observations(url)
+    geo, prj, obsdata, mask = source.get_observations(url)
 
     log(f"# Preparing ancillary data")
+
+    log(f"Writing observation data to {obstmp}")
+
+    ysize, xsize, psize = obsdata.shape
+    driver = gdal.GetDriverByName("GTiff")
+    fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
+    fd.SetGeoTransform(geo)
+    fd.SetProjection(prj)
+    for i in range(fd.RasterCount):
+        ob = fd.GetRasterBand(i + 1)
+        ob.WriteArray(obsdata[:, :, i])
+        ob.SetNoDataValue(np.nan)
+        ob.SetDescription(source.bands[i])
+    del fd
+
+    log(f"Writing mask to mask.tif")
+
+    ysize, xsize = mask.shape
+    driver = gdal.GetDriverByName("GTiff")
+    fd = driver.Create('mask.tif', xsize, ysize, 1, gdal.GDT_Byte)
+    fd.SetGeoTransform(geo)
+    fd.SetProjection(prj)
+    ob = fd.GetRasterBand(1)
+    ob.WriteArray(mask)
+    ob.SetNoDataValue(0)
+    del fd
 
     log(f"Determining ancillary files required")
 
@@ -648,7 +678,7 @@ def run(
         # Prepare all the appropriate ancillary data sets and pass the
         # observation data as the last one in the list.
 
-        args = []
+        args = [mask.copy()]
         for ip in inputs:
 
             fn = ip["filename"]
@@ -665,14 +695,14 @@ def run(
         # A simple model only needs to implement the `predict` method but can also
         # implement `predict_and_save` if more control of writing output is needed.
 
-        try:
+        #try:
 
-            model.predict_and_save(outfn, *args)
+        model.predict_and_save(outfn, *args)
 
-        except Exception as e:
-            traceback = e.__traceback__
-            warning(f"Error in model '{name}': {e}, see line {traceback.tb_lineno}.")
-            sys.exit(1)
+        #except Exception as e:
+        #    traceback = e.__traceback__
+        #    warning(f"Error in model '{name}': {e}, see line {traceback.tb_lineno}.")
+        #    sys.exit(1)
 
 
 def astuple(v):

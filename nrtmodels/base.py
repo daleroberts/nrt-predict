@@ -1,11 +1,12 @@
 import numpy as np
 import sys
 
-from osgeo import gdal, ogr, osr
+from osgeo import gdal
 
 DTYPEMAP = {"float32": gdal.GDT_Float32,
             "int16": gdal.GDT_Int16,
-            "int8": gdal.GDT_Byte}
+            "int8": gdal.GDT_Byte,
+            "bool": gdal.GDT_Byte}
 
 class Model:
 

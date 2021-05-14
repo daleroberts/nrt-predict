@@ -1,5 +1,7 @@
 from .base import Model
+from pathlib import Path
 import numpy as np
+import joblib
 import sys
 
 
@@ -254,3 +256,51 @@ class UnsupervisedBurnscarDetect2(Model):
         outliers = outliers.reshape(bX.shape)
 
         return outliers
+
+class SupervisedBurnscarDetect1(Model):
+    """
+    Supervised Burn Scar Detection - Model 1
+    
+    This is a supervised algorithm for detecting burn
+    scars in NRT images.
+    
+    Developed by Dale Roberts <dale.o.roberts@gmail.com>
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        path = Path(__file__).resolve().parent
+        self._model = joblib.load(path / 'burnscar-model-1.pkl')
+
+    def _generate_features(self, pre, pst):
+        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
+        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
+
+        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
+            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
+        )
+        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
+            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
+        )
+
+        pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
+        pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
+
+        return np.dstack([pre_nbr - pst_nbr, pst_bsi - pre_bsi, pst_ndvi - pre_ndvi, pst_ndvi]).reshape((-1, 4))
+
+    def predict(self, mask, pre, pst):
+        X = self._generate_features(pre, pst)
+
+        bad = np.isnan(X)
+        X[bad] = 0
+
+        burns = self._model.predict(X).reshape(pre.shape[:2])
+        burns[mask] = 0
+
+        from skimage import morphology
+        burns = morphology.binary_erosion(burns, morphology.diamond(3))
+        burns = morphology.binary_dilation(burns, morphology.diamond(6))
+        burns = morphology.convex_hull_object(burns)
+        burns = morphology.binary_erosion(burns, morphology.diamond(3))
+
+        return burns
