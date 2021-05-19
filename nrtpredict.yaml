@@ -45,7 +45,7 @@ saveobs: obs.tif
 
 models:
 
-   - name: UnsupervisedBurnscarDetect2
+   - name: NoOp
      output: obs.tif
      driver: COG
 
@@ -57,7 +57,7 @@ models:
 # Temporary directory. Allow environment variables in name
 # e.g., $HOME or $PBS_JOBFS
 
-tmpdir: /tmp/alchemist
+tmpdir: /tmp
 
 # The shapefile containing the temporary clipping shape which
 # is generated from the area of the NRT observation.

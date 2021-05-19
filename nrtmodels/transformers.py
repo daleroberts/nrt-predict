@@ -1,7 +1,6 @@
 import numpy as np
 
 from .base import Model, NoOp
-from nrtpredict import UnsupervisedBurnscarDetect2
 
 try: # only enable if xarray present
 
