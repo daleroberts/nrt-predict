@@ -24,7 +24,15 @@ setup(
     author_email="dale.o.roberts@gmail.com",
     license="BSD-3-Clause License",
     tests_require=tests_require,
-    install_requires=["numpy", "gdal"],
+    install_requires=[
+        "numpy",
+        "gdal",
+        "joblib",
+        "psutil",
+        "requests",
+        "pyyaml",
+        "scikit-image"
+    ],
     packages=['nrtmodels'],
     package_dir={'nrtmodels': 'nrtmodels'},
     py_modules=['nrtpredict'],
