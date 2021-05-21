@@ -31,7 +31,8 @@ setup(
         "psutil",
         "requests",
         "pyyaml",
-        "scikit-image"
+        "scikit-image",
+        "scikit-learn",
     ],
     packages=['nrtmodels'],
     package_dir={'nrtmodels': 'nrtmodels'},
