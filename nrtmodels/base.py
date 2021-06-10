@@ -18,6 +18,20 @@ class Model:
         for k,v in kwargs.items():
             setattr(self, k, v)
 
+    def eval_expr(self, ftrexpr, data):
+        try:
+            env = {
+                **{b: data[b] for b in self.bands},
+                **{s: getattr(np, s) for s in dir(np)},
+            }
+        except IndexError:
+            bandnos = {b: i for i, b in enumerate(self.bands)}
+            env = {
+                **{b: data[:,:,bandnos[b]] for b in self.bands},
+                **{s: getattr(np, s) for s in dir(np)},
+            }
+        return eval(ftrexpr, {"__builtins__": {}}, env)
+
     def log(self, s):
         if self.verbose:
             print(s, file=sys.stderr)
@@ -63,8 +77,15 @@ class Model:
 
 class NoOp(Model):
 
-    def predict(self, data):
-        if isinstance(data, list):
-                return np.dstack(data)
-        else:
-            return data
+    def predict(self, mask, *datas):
+        return np.dstack([*datas])
+
+
+class FirstBand(Model):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.required_bands = [0]
+
+    def predict(self, mask, *datas):
+        return np.dstack([*datas])

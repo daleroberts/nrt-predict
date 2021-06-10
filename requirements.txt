@@ -1,7 +1,9 @@
-pytest
-joblib
 numpy
-psutil 
+gdal
+joblib
+psutil
 requests
 pyyaml
 scikit-image
+scikit-learn
+pytest

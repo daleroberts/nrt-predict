@@ -1,17 +1,20 @@
 """
 nrt-predict
 """
-
-import pathlib
-
 from setuptools import setup
+from pathlib import Path
 
 tests_require = [
     "pytest",
     "joblib",
 ]
 
-README = (pathlib.Path(__file__).parent / "README.md").read_text()
+parent = Path(__file__).parent
+
+REQUIRES = (parent / "requirements.txt").read_text().splitlines()
+README = (parent / "README.md").read_text()
+
+breakpoint()
 
 setup(
     name="nrt-predict",

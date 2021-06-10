@@ -23,6 +23,7 @@ from osgeo import gdal, ogr, osr
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from urllib.request import urlopen
+from copy import deepcopy
 from pydoc import locate
 from uuid import uuid4
 from io import BytesIO
@@ -33,9 +34,9 @@ osr.UseExceptions()
 
 gdal.PushErrorHandler("CPLQuietErrorHandler")
 
-MODELDIR = "nrtmodels"
+DEBUG = False
 
-BANDS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+MODELDIR = "nrtmodels"
 
 RST = "\033[0m"
 RED = "\033[38;5;9m"
@@ -76,12 +77,14 @@ class DEASentinel2(Source):
     def __init__(self):
         self.bands = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
 
-    def get_observations(self, url, product="NBAR", onlymask=False, **args):
+    def get_observations(self, url, product="NBART", onlymask=False, **args):
         """
         Get the NRT observation from the S3 or public (HTTP) bucket and load the
         data into memory in a numpy array of shape (ysize, xsize, nbands). This is
         assuming the DEA package format.
         """
+        bands = args.pop('bands_required', self.bands)
+
         pkg = parse_pkg(url)
 
         if url.startswith("/vsis3"):
@@ -122,20 +125,18 @@ class DEASentinel2(Source):
 
         # Load other bands
 
-        data = np.empty((ysize, xsize, len(BANDS)), dtype=np.float32)
-        for i, band in enumerate(BANDS):
+        data = np.empty((ysize, xsize, len(bands)), dtype=np.float32)
+        for i, band in enumerate(bands):
             fn = f"{url}/{product}/{product}_{band}.TIF"
             fd = gdal.Open(fn)
             fd.ReadAsArray(buf_obj=data[:, :, i], buf_ysize=ysize, buf_xsize=xsize)
             hc = checksum_array(data[:, :, i])
             log(f"Band {band}  (sha256:{hc})")
 
-        # TODO: set in config?
-
         data /= 10000
         data[mask == 0] = np.nan
 
-        log(f"data shape: {data.shape}")
+        log(f"\nShape: {data.shape}")
 
         return (geo, prj, data, mask != 1)
 
@@ -154,6 +155,8 @@ class DEASentinel2Split(Source):
         data into memory in a numpy array of shape (ysize, xsize, nbands). This is
         assuming the DEA package format.
         """
+        bands_required = args.pop('bands_required', self.bands)
+
         pkg = parse_pkg(url)
 
         if url.startswith("/vsis3"):
@@ -281,7 +284,7 @@ def check_checksum(f, checksum, blocksize=2 << 15):
 # TODO: path@sha256:123123 format?
 
 
-def get_model(name, **args):
+def get_model(name, **config):
     """
     Given 'name', load a `Model` from disk and update its settings.
     This handles the standard case where the models are stored in
@@ -300,7 +303,7 @@ def get_model(name, **args):
             check_checksum(f, checksum)
             f.seek(0)
             model = joblib.load(f)
-            model.update(**args)
+            model.update(**config)
 
     # Handle model stored in a s3 bucket
 
@@ -315,7 +318,7 @@ def get_model(name, **args):
             check_checksum(f, checksum)
             f.seek(0)
             model = joblib.load(f)
-            model.update(**args)
+            model.update(**config)
 
     # Handle standard case where model is in the MODELDIR directory
     # in the current working directory
@@ -327,7 +330,7 @@ def get_model(name, **args):
         sys.path = sys.path[1:]
         if impl is None:
             raise ImportError(modelname)
-        model = impl(**args)
+        model = impl(**config)
 
     return model
 
@@ -398,9 +401,15 @@ def log(msg="", noinfo=False, color=GREEN):
     else:
         mem = f"[MEM {rss}]"
     if isinstance(msg, str) and msg.startswith("#"):
-        print("\n" + color + str(msg) + RST + " " + mem + "\n", file=sys.stderr)
+        msg = "\n" + color + str(msg) + RST + " " + mem + "\n"
+    elif isinstance(msg, str) and msg.startswith("@"):
+        msg = BLUE + msg[1:] + RST
     else:
-        print(str(msg), file=sys.stderr)
+        msg = str(msg)
+    if DEBUG and not msg.startswith("#"):
+        print(mem + " " + msg, file=sys.stderr)
+    else:
+        print(msg, file=sys.stderr)
 
 
 def warning(msg):
@@ -486,7 +495,7 @@ def generate_clip_shape_from(fn, shpfn):
 
     poly = polygon_from_geobox(geo, xsize, ysize)
 
-    log(f"wkt: {poly.ExportToWkt()}")
+    log(f"Wkt: {poly.ExportToWkt()}")
 
     fdef = layer.GetLayerDefn()
     oftr = ogr.Feature(fdef)
@@ -515,11 +524,36 @@ def run(
     and then pass this data to the algorithm. Use `args` to parametrise.
     """
 
-    url = normalise_url(url)
+    log("# Loading models")
 
-    log(f"URL: {url}")
+    loaded_models = []
+
+    for m in models:
+
+        config = deepcopy(m)
+
+        name = config.pop("name")
+        outfn = config.pop("output")
+        driver = config.pop("driver")
+        inputs = config.pop("inputs")
+
+        log(f"Model: {name}")
+
+        try:
+
+            model = get_model(name, **config)
+
+        except IncorrectChecksumError as e:
+            warning(f"Model has an incorrect SHA256 checksum, exiting...")
+            sys.exit(1)
+
+        loaded_models.append(model)
 
     log("# Retrieving NRT observation details")
+
+    url = normalise_url(url)
+
+    log(f"Obs. URL:  {url}")
 
     obswkt = get_bounds(url)
     obsdate = parse_obsdate(url)
@@ -529,23 +563,29 @@ def run(
 
     source = DEASentinel2()
 
-    geo, prj, obsdata, mask = source.get_observations(url)
+    # Determine the minimal set of bands required across all models
+
+    def name(x):
+        if isinstance(x, int):
+            return source.bands[x]
+        else:
+            return x
+
+    bands = {band:False for band in source.bands}
+    for model in loaded_models:
+        try:
+            required = [name(b) for b in model.required_bands]
+        except AttributeError:
+            required = source.bands
+        for band in required:
+            bands[band] = True
+    bands = [k for k,v in bands.items() if v is True]
+
+    log(f"Req.Bands: {','.join(bands)}")
+
+    geo, prj, obsdata, mask = source.get_observations(url, bands_required=bands)
 
     log(f"# Preparing ancillary data")
-
-    log(f"Writing observation data to {obstmp}")
-
-    ysize, xsize, psize = obsdata.shape
-    driver = gdal.GetDriverByName("GTiff")
-    fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
-    fd.SetGeoTransform(geo)
-    fd.SetProjection(prj)
-    for i in range(fd.RasterCount):
-        ob = fd.GetRasterBand(i + 1)
-        ob.WriteArray(obsdata[:, :, i])
-        ob.SetNoDataValue(np.nan)
-        ob.SetDescription(source.bands[i])
-    del fd
 
     log(f"Writing mask to mask.tif")
 
@@ -559,6 +599,20 @@ def run(
     ob.SetNoDataValue(0)
     del fd
 
+    log(f"Writing observation data to {obstmp}")
+
+    ysize, xsize, psize = obsdata.shape
+    driver = gdal.GetDriverByName("GTiff")
+    fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
+    fd.SetGeoTransform(geo)
+    fd.SetProjection(prj)
+    for i in range(fd.RasterCount):
+        ob = fd.GetRasterBand(i + 1)
+        ob.WriteArray(obsdata[:, :, i])
+        ob.SetNoDataValue(np.nan)
+        ob.SetDescription(bands[i])
+    del fd
+
     log(f"Determining ancillary files required")
 
     outputs = []
@@ -566,7 +620,7 @@ def run(
     for model in models:
         name = model["name"]
 
-        log(f"Checking {name}")
+        log(f"Checking '{name}' model")
 
         output = model["output"]
 
@@ -590,99 +644,100 @@ def run(
         clipshpfn = generate_clip_shape_from(obstmp, clipshpfn)
 
         if not clipshpfn.startswith("/vsimem"):
-            log(f"Saving clipping area to disk as '{clipshpfn}'")
             log(f"Proj: {prj}")
+            log(f"Saving clipping area to disk as '{clipshpfn}'")
     else:
         log(f"No ancillary datasets are required!")
 
     datamap = {}
 
     for afn in inputs:
-        log(f"Clipping and warping input '{afn}'")
-
         ofn = f"{tmpdir}/{uuid.uuid4()}"
+
+        log(f"Clipping and warping input '{afn}' to '{ofn}'")
+
         fd = gdal.Warp(ofn, afn, cutlineDSName=clipshpfn, cropToCutline=True, dstSRS=prj)
 
-        nbands = fd.RasterCount
-        nodata = fd.GetRasterBand(1).GetNoDataValue()
+        datamap[afn] = ofn
 
-        if isinstance(obsdata, list) and nbands == len(obsdata):
-            args = []
-            bands = source.bands
-            for i, obs in enumerate(obsdata):
-                ysize, xsize = obs.shape
-                data = np.empty((ysize, xsize), dtype=np.float32)
 
-                rb = fd.GetRasterBand(i + 1)
-                rb.ReadAsArray(
-                    buf_type=gdal.GDT_Float32,
-                    buf_xsize=xsize,
-                    buf_ysize=ysize,
-                    buf_obj=data[:, :],
-                    resample_alg=gdal.GRIORA_NearestNeighbour,
-                )
-                hc = checksum_array(data)
-                log(f"Band {bands[i]}  (sha256:{hc}) {ysize} x {xsize}")
-                data[data == nodata] = np.nan
-        else:
+    log("# Applying loaded models")
+
+    for model, m in zip(loaded_models, models):
+
+        config = deepcopy(m)
+
+        name = config.pop("name")
+
+        log(f"@{name}")
+
+        # Update model config based on new information from observation
+
+        config["obswkt"] = obswkt
+        config["obsdate"] = obsdate
+        config["geo"] = geo
+        config["prj"] = prj
+        config["bands"] = bands # possibly reduced set of bands
+
+        model.update(**config)
+
+        # Prepare all the appropriate ancillary data sets and pass the
+        # observation data as the last one in the list.
+
+        args = [mask.copy()]
+
+        inputs = m["inputs"]
+
+        log("Inputs:")
+        for ip in inputs:
+            fn = datamap[ip["filename"]]
+
+            fd = gdal.Open(fn)
+
+            # First assume bands are the same as source
+            ipbands = source.bands
+            try:
+                # Then see if they are overwritten in config
+                ipbands = ip["bands"]
+            except KeyError:
+                # If that fails, try to get bandnames from file
+                fbands = []
+                for i in range(fd.RasterCount):
+                    rb = fd.GetRasterBand(i+1)
+                    desc = rb.GetDescription()
+                    if len(desc) > 0:
+                        fbands.append(desc)
+                if len(fbands) == fd.RasterCount:
+                    ipbands = fbands
+
+            log(f" - path:    {ip['filename']}")
+            log(f"   bands:   {','.join(ipbands)}")
+
+            notreq = set(source.bands) - set(bands)
+            toload = [b for b in ipbands if b not in notreq]
+            bandidx = [i+1 for i, b in zip(range(fd.RasterCount), ipbands) if b not in notreq]
+            log(f"   loading: {','.join(toload)}")
+
+            nbands = len(bandidx)
+
             data = np.empty((ysize, xsize, nbands), dtype=np.float32)
-            for i in range(nbands):
-                band = fd.GetRasterBand(i + 1)
+            for i, bi in enumerate(bandidx):
+                band = fd.GetRasterBand(bi)
                 band.ReadAsArray(
                     buf_type=gdal.GDT_Float32,
                     buf_xsize=xsize,
                     buf_ysize=ysize,
                     buf_obj=data[:, :, i],
                 )
+
+            nodata = fd.GetRasterBand(1).GetNoDataValue()
             data[data == nodata] = np.nan
 
-        nnan = np.count_nonzero(np.isnan(data))
-        nval = xsize * ysize * nbands
-        pnan = nnan / nval
-        if pnan > 0.9:
-            warning(f"clipped input '{afn}' has more than 90% no data")
-
-        gdal.Unlink(ofn)
-
-        datamap[afn] = data
-
-    # TODO: make this changeable
-    # TODO: list of models, different outputs for each one so they can be chained?
-
-    for m in models:
-
-        name = m.pop("name")
-        outfn = m.pop("output")
-        driver = m.pop("driver")
-        inputs = m.pop("inputs")
-
-        log(f"# Model: {name}")
-
-        m["obswkt"] = obswkt
-        m["obsdate"] = obsdate
-        m["geo"] = geo
-        m["prj"] = prj
-        #        m["xsize"] = xsize
-        #        m["ysize"] = ysize
-        m["driver"] = driver
-        m["bands"] = source.bands
-
-        try:
-
-            model = get_model(name, **m)
-
-        except IncorrectChecksumError as e:
-            warning(f"Model has an incorrect SHA256 checksum, exiting...")
-            sys.exit(1)
-
-        # Prepare all the appropriate ancillary data sets and pass the
-        # observation data as the last one in the list.
-
-        args = [mask.copy()]
-        for ip in inputs:
-
-            fn = ip["filename"]
-            data = datamap[fn].copy()
+            nnan = np.count_nonzero(np.isnan(data))
+            nval = xsize * ysize * nbands
+            pnan = nnan / nval
+            if pnan > 0.9:
+                warning(f"clipped input '{afn}' has more than 90% no data")
 
             # TODO: scale, etc?
 
@@ -703,6 +758,16 @@ def run(
         #    traceback = e.__traceback__
         #    warning(f"Error in model '{name}': {e}, see line {traceback.tb_lineno}.")
         #    sys.exit(1)
+
+        log("")
+
+    log("# Cleaning up")
+
+    for k, fn in datamap.items():
+        log(f"Removing {fn}")
+        gdal.Unlink(fn)
+
+    log("")
 
 
 def astuple(v):

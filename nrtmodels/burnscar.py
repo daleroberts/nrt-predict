@@ -4,56 +4,46 @@ import numpy as np
 import joblib
 import sys
 
+NBR = '(B08 - B11)/(B08 + B11)'
+BSI = '((B11 + B04) - (B08 - B02)) / ((B11 + B04) + (B08 - B02))'
+NDVI = '(B08 - B04)/(B08 + B04)'
 
 class GeomedianNBR(Model):
     def predict(self, pre, pst):
-        # NBR = (B08 - B11)/(B08 + B11)
-        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
-        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
-
+        pre_nbr = self.eval_expr(NBR, pre)
+        pst_nbr = self.eval_expr(NBR, pst)
         return pre_nbr - pst_nbr
 
 
 class GeomedianBSI(Model):
     def predict(self, pre, pst):
-        # BSI = ((B11 + B04) - (B08 - B02)) / ((B11 + B04) + (B08 - B02))
-        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
-            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
-        )
-        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
-            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
-        )
-
+        pre_bsi = self.eval_expr(BSI, pre)
+        pst_bsi = self.eval_expr(BSI, pst)
         return pst_bsi - pre_bsi
 
 
 class GeomedianNDVI(Model):
     def predict(self, pre, pst):
-        # NDVI = (B08 - B04)/(B08 + B04)
-        pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
-        pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
-
+        pre_ndvi = self.eval_expr(NDVI, pre)
+        pst_ndvi = self.eval_expr(NDVI, pst)
         return pre_ndvi - pst_ndvi
 
 
 class GeomedianDiff(Model):
     def predict(self, pre, pst):
-        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
-        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
+        pre_nbr = self.eval_expr(NBR, pre)
+        pst_nbr = self.eval_expr(NBR, pst)
+        dnbr = pre_nbr - pst_nbr
 
-        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
-            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
-        )
-        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
-            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
-        )
+        pre_bsi = self.eval_expr(BSI, pre)
+        pst_bsi = self.eval_expr(BSI, pst)
+        dbsi = pst_bsi - pre_bsi
 
-        pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
-        pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
+        pre_ndvi = self.eval_expr(NDVI, pre)
+        pst_ndvi = self.eval_expr(NDVI, pst)
+        dndvi = pst_ndvi - pre_ndvi
 
-        diff = np.dstack([pre_nbr - pst_nbr, pst_bsi - pre_bsi, pst_ndvi - pre_ndvi])
-
-        return diff
+        return np.dstack([dnbr, dbsi, dndvi])
 
 
 class UnsupervisedBurnscarDetect1(Model):
@@ -66,19 +56,15 @@ class UnsupervisedBurnscarDetect1(Model):
     Developed by Dale Roberts <dale.o.roberts@gmail.com>
     """
 
-    def _generate_features(self, pre, pst):
-        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
-        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
+    def generate_features(self, pre, pst):
+        pre_nbr = self.eval_expr(NBR, pre)
+        pst_nbr = self.eval_expr(NBR, pst)
 
-        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
-            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
-        )
-        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
-            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
-        )
+        pre_bsi = self.eval_expr(BSI, pre)
+        pst_bsi = self.eval_expr(BSI, pst)
 
-        pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
-        pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
+        pre_ndvi = self.eval_expr(NDVI, pre)
+        pst_ndvi = self.eval_expr(NDVI, pst)
 
         return np.dstack([pst_bsi - pre_bsi, pre_ndvi - pst_ndvi, pre_nbr - pst_nbr])
 
@@ -90,7 +76,7 @@ class UnsupervisedBurnscarDetect1(Model):
         from sklearn import decomposition, cluster
         from skimage import morphology
 
-        X = self._generate_features(pre, pst)
+        X = self.generate_features(pre, pst)
 
         mu = np.nanmean(X, axis=(0, 1))
         mm = np.nanmedian(X, axis=(0, 1))
@@ -170,21 +156,17 @@ class UnsupervisedBurnscarDetect2(Model):
     Developed by Dale Roberts <dale.o.roberts@gmail.com>
     """
 
-    def _generate_features(self, pre, pst):
-        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
-        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
+    def generate_features(self, pre, pst):
+        pre_nbr = self.eval_expr(NBR, pre)
+        pst_nbr = self.eval_expr(NBR, pst)
         dnbr = pre_nbr - pst_nbr
 
-        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
-            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
-        )
-        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
-            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
-        )
+        pre_bsi = self.eval_expr(BSI, pre)
+        pst_bsi = self.eval_expr(BSI, pst)
         dbsi = pst_bsi - pre_bsi
 
-        pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
-        pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
+        pre_ndvi = self.eval_expr(NDVI, pre)
+        pst_ndvi = self.eval_expr(NDVI, pst)
         dndvi = pre_ndvi - pst_ndvi
 
         return np.dstack([dnbr, dbsi, dndvi, -pst_ndvi])
@@ -193,7 +175,7 @@ class UnsupervisedBurnscarDetect2(Model):
         from skimage import feature, draw, morphology
         from sklearn import semi_supervised
 
-        X = self._generate_features(pre, pst)
+        X = self.generate_features(pre, pst)
 
         bad = np.isnan(X)
         X[bad] = 0
@@ -257,6 +239,7 @@ class UnsupervisedBurnscarDetect2(Model):
 
         return outliers
 
+
 class SupervisedBurnscarDetect1(Model):
     """
     Supervised Burn Scar Detection - Model 1
@@ -273,18 +256,14 @@ class SupervisedBurnscarDetect1(Model):
         self._model = joblib.load(path / 'burnscar-model-1.pkl')
 
     def _generate_features(self, pre, pst):
-        pre_nbr = (pre[:, :, 6] - pre[:, :, 8]) / (pre[:, :, 6] + pre[:, :, 8])
-        pst_nbr = (pst[:, :, 6] - pst[:, :, 8]) / (pst[:, :, 6] + pst[:, :, 8])
+        pre_nbr = self.eval_expr(NBR, pre)
+        pst_nbr = self.eval_expr(NBR, pst)
 
-        pre_bsi = (pre[:, :, 8] + pre[:, :, 2] - pre[:, :, 6] + pre[:, :, 0]) / (
-            pre[:, :, 8] + pre[:, :, 2] + pre[:, :, 6] - pre[:, :, 0]
-        )
-        pst_bsi = (pst[:, :, 8] + pst[:, :, 2] - pst[:, :, 6] + pst[:, :, 0]) / (
-            pst[:, :, 8] + pst[:, :, 2] + pst[:, :, 6] - pst[:, :, 0]
-        )
+        pre_bsi = self.eval_expr(BSI, pre)
+        pst_bsi = self.eval_expr(BSI, pst)
 
-        pre_ndvi = (pre[:, :, 6] - pre[:, :, 2]) / (pre[:, :, 6] + pre[:, :, 2])
-        pst_ndvi = (pst[:, :, 6] - pst[:, :, 2]) / (pst[:, :, 6] + pst[:, :, 2])
+        pre_ndvi = self.eval_expr(NDVI, pre)
+        pst_ndvi = self.eval_expr(NDVI, pst)
 
         return np.dstack([pre_nbr - pst_nbr, pst_bsi - pre_bsi, pst_ndvi - pre_ndvi, pst_ndvi]).reshape((-1, 4))
 
