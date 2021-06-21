@@ -21,7 +21,7 @@ class Model:
     def eval_expr(self, ftrexpr, data):
         try:
             env = {
-                **{b: data[b] for b in self.bands},
+                **{b: data[b] for b in data.keys()},
                 **{s: getattr(np, s) for s in dir(np)},
             }
         except IndexError:
