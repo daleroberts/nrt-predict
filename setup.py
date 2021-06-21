@@ -14,8 +14,6 @@ parent = Path(__file__).parent
 REQUIRES = (parent / "requirements.txt").read_text().splitlines()
 README = (parent / "README.md").read_text()
 
-breakpoint()
-
 setup(
     name="nrt-predict",
     version="0.1",
