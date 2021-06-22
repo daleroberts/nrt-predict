@@ -55,13 +55,21 @@ models:
 #         - filename: clip.tif
 #           bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
 
-   - name: UnsupervisedBurnscarDetect2
-     required_bands: [B08, B11, B04, B02]
-     output: change.tif
+   - name: BandTransform
+     output: B02.tif
      driver: GTiff
-     inputs:
-         - filename: clip.tif
-           bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+     expr: 'clip(B02/10000., 0.01, 0.3)'
+#     inputs:
+#         - filename: clip.tif
+#           bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+
+#   - name: UnsupervisedBurnscarDetect2
+#     required_bands: [B08, B11, B04, B02]
+#     output: change.tif
+#     driver: GTiff
+#     inputs:
+#         - filename: clip.tif
+#           bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
 
 # Temporary directory. Allow environment variables in name
 # e.g., $HOME or $PBS_JOBFS

@@ -89,3 +89,26 @@ class FirstBand(Model):
 
     def predict(self, mask, *datas):
         return np.dstack([*datas])
+
+
+class BandTransform(Model):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.expr = kwargs.pop('expr', 'B02')
+        self.required_bands = ['B02']
+
+    def predict(self, mask, *datas):
+        print(f'expr: {self.expr}')
+        results = []
+        for data in datas:
+            dd = {}
+            for i, bn in enumerate(self.required_bands):
+                dd[bn] = data[:,:,i]
+            print(dd)
+            result = self.eval_expr(self.expr, dd)
+            result[mask] = 0
+            bad = np.isnan(result)
+            result[bad] = 0
+            results.append(result)
+        return np.dstack(results)
