@@ -19,18 +19,24 @@ class Model:
             setattr(self, k, v)
 
     def eval_expr(self, ftrexpr, data):
+        self.log(f'Generating feature from: {ftrexpr}')
         try:
             env = {
                 **{b: data[b] for b in data.keys()},
                 **{s: getattr(np, s) for s in dir(np)},
             }
-        except IndexError:
+            self.log('Evaluation environment created based on dict of data')
+        except (IndexError, AttributeError):
             bandnos = {b: i for i, b in enumerate(self.bands)}
             env = {
                 **{b: data[:,:,bandnos[b]] for b in self.bands},
                 **{s: getattr(np, s) for s in dir(np)},
             }
-        return eval(ftrexpr, {"__builtins__": {}}, env)
+            self.log('Evaluation environment created based on dense data')
+        with np.errstate(all='ignore'):
+            result = eval(ftrexpr, {"__builtins__": {}}, env)
+        self.log('Expression evaluated')
+        return result
 
     def log(self, s):
         if self.verbose:

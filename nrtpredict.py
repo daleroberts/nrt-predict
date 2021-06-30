@@ -542,6 +542,7 @@ def run(
         try:
 
             model = get_model(name, **config)
+            model.log = log
 
         except IncorrectChecksumError as e:
             warning(f"Model has an incorrect SHA256 checksum, exiting...")

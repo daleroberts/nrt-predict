@@ -161,15 +161,25 @@ class UnsupervisedBurnscarDetect2(Model):
         pst_nbr = self.eval_expr(NBR, pst)
         dnbr = pre_nbr - pst_nbr
 
+        self.log('DNBR generated')
+
         pre_bsi = self.eval_expr(BSI, pre)
         pst_bsi = self.eval_expr(BSI, pst)
         dbsi = pst_bsi - pre_bsi
+
+        self.log('DBSI generated')
 
         pre_ndvi = self.eval_expr(NDVI, pre)
         pst_ndvi = self.eval_expr(NDVI, pst)
         dndvi = pre_ndvi - pst_ndvi
 
-        return np.dstack([dnbr, dbsi, dndvi, -pst_ndvi])
+        self.log('DNDVI generated')
+
+        stack = np.dstack([dnbr, dbsi, dndvi, -pst_ndvi])
+
+        self.log('Data stacked')
+
+        return stack
 
     def predict(self, mask, pre, pst):
         from skimage import feature, draw, morphology
@@ -177,19 +187,25 @@ class UnsupervisedBurnscarDetect2(Model):
 
         X = self.generate_features(pre, pst)
 
-        bad = np.isnan(X)
-        X[bad] = 0
+        self.log('Masking data')
+
+        good = np.isfinite(X).all(axis=2)
+        X[~good] = 0
 
         bX = (X[:,:,0]>0)*((1 + X[:, :, 0]) * (1 + X[:, :, 1]) - 1).astype(np.float64)
         #bX = ((1 + X[:, :, 0]) * (1 + X[:, :, 1]) - 1).astype(np.float64)
 
         bX[mask] = 0
 
+        self.log('Change layer generated')
+
         # TODO: Parameterise
         with np.errstate(all='ignore'):
             blobs = feature.blob_doh(
                 bX, min_sigma=5, max_sigma=30, overlap=0.9, threshold=0.008
             )
+
+        self.log('Blobs detected')
 
         focus = np.zeros_like(bX, dtype=bool)
         for blob in blobs:
@@ -218,10 +234,12 @@ class UnsupervisedBurnscarDetect2(Model):
 
         outliers[mask] = 0
 
+        self.log('Potential outliers masked')
+
         nunknown = np.count_nonzero(outliers == -1)
         ntotal = np.count_nonzero(focus)
 
-        self.log(f"spreading: {nunknown} / {ntotal} ({nunknown / ntotal:.4f})")
+        self.log(f"Spreading: {nunknown} / {ntotal} ({nunknown / ntotal:.4f})")
 
         y = outliers[focus].reshape((-1,))
         X = X[focus].reshape((-1, X.shape[-1]))
@@ -232,10 +250,12 @@ class UnsupervisedBurnscarDetect2(Model):
         )
         lblspread.fit(X, y)
 
-        self.log(f"iters: {lblspread.n_iter_}")
+        self.log(f"Iters: {lblspread.n_iter_}")
 
         outliers[focus] = lblspread.transduction_
         outliers = outliers.reshape(bX.shape)
+
+        self.log('Done.')
 
         return outliers
 
