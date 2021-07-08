@@ -37,6 +37,9 @@ setup(
     ],
     packages=['nrtmodels'],
     package_dir={'nrtmodels': 'nrtmodels'},
+    package_data={
+        "nrtmodels": ["nrtmodels/*.pkl"]
+    },
     py_modules=['nrtpredict'],
     entry_points="""
         [console_scripts]
