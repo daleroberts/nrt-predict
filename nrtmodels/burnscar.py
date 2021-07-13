@@ -78,6 +78,9 @@ class UnsupervisedBurnscarDetect1(Model):
 
         X = self.generate_features(pre, pst)
 
+        good = np.isfinite(X).all(axis=2)
+        X[~good] = 0
+
         mu = np.nanmean(X, axis=(0, 1))
         mm = np.nanmedian(X, axis=(0, 1))
         pl, pu = np.nanpercentile(X, (2, 98), axis=(0, 1))
@@ -91,9 +94,6 @@ class UnsupervisedBurnscarDetect1(Model):
 
         for i in range(X.shape[-1]):
             np.clip(X[:, :, i], pl[i], pu[i], out=X[:, :, i])
-
-        bad = np.isnan(X)
-        X[bad] = 0
 
         # TODO parameterise this
         pX = extract_patches_2d(X, (3, 3))
@@ -290,8 +290,8 @@ class SupervisedBurnscarDetect1(Model):
     def predict(self, mask, pre, pst):
         X = self._generate_features(pre, pst)
 
-        bad = np.isnan(X)
-        X[bad] = 0
+        good = np.isfinite(X).all(axis=2)
+        X[~good] = 0
 
         burns = self._model.predict(X).reshape(pre.shape[:2])
         burns[mask] = 0
