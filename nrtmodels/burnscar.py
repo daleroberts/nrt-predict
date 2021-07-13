@@ -290,7 +290,7 @@ class SupervisedBurnscarDetect1(Model):
     def predict(self, mask, pre, pst):
         X = self._generate_features(pre, pst)
 
-        good = np.isfinite(X).all(axis=2)
+        good = np.isfinite(X).all(axis=1)
         X[~good] = 0
 
         burns = self._model.predict(X).reshape(pre.shape[:2])
