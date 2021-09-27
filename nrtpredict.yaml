@@ -1,6 +1,6 @@
 #################################################
 ###                                            ##
-###  Near-realtime (NRT) Prediction Settings   ##
+###  Near Real Time (NRT) Prediction Settings  ##
 ###                                            ##  
 #################################################
 
@@ -14,11 +14,19 @@ quiet: False
 
 # Choice of product in the package to use: NBAR or NBART?
 
-product: NBAR
+product: NBART
 
 # Save the observation. If this option is set to a filename then
 # the observation will be saved to disk as a GeoTiff.
 obstmp: obs.tif
+  
+# Tile the predictions to save memory into tilewidth x tilewidth sized tiles.
+
+#tilewidth: 1000
+
+# Scale input observation
+
+obsscale: 0.0001  # / 10000.
 
 # The models to run. Each model can be given various configuration options. The
 # output can be an in-memory file by setting 'output: /vsimem/filename'. All
@@ -43,38 +51,69 @@ obstmp: obs.tif
 # will change the checksum of the model.
 
 models:
-
-#   - name: NoOp
-#     output: obs.tif
-#     driver: COG
+#  - name: NoOp
+#    output: result.tif
+#    driver: GTiff
 
 #   - name: FirstBand
 #     output: B02.tif
 #     driver: GTiff
+       
+#   - name: BandTransform
+#     output: B02.tif
+#     driver: GTiff
+#     expr: 'clip(B02/10000., 0.01, 0.3)'
 #     inputs:
 #         - filename: clip.tif
 #           bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
 
-   - name: BandTransform
-     output: B02.tif
-     driver: GTiff
-     expr: 'clip(B02/10000., 0.01, 0.3)'
-#     inputs:
-#         - filename: clip.tif
-#           bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
-
-#   - name: UnsupervisedBurnscarDetect2
+#   - name: UnsupervisedBurnscarDetect1
 #     required_bands: [B08, B11, B04, B02]
 #     output: change.tif
 #     driver: GTiff
 #     inputs:
-#         - filename: clip.tif
+#         - filename: s2be.vrt
 #           bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+
+#  - name: CloudAndShadowDetect
+#    nodata: 0
+#    output: clouds.tif
+#    inputs:
+#      - filename: clip-55HDB.tif
+#        scale: 0.0001
+#        bands: [B02, B03, B04, B05, B06, B07, B08, B8A, B11, B12]
+#        required_bands: [B03, B08, B8A, B11, B12]
+
+  - name: PreviousClear
+    output: prev.tif
+
+  - name: VegetationChangeTernary
+    required_bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+    output: change.tif
+    inputs:
+      - filename: prev.tif
+        scale: 0.0001
+        bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+
+  - name: SupervisedVegetationChange1
+    required_bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+    output: veg2.tif
+    nodata: 0
+    inputs:
+      - filename: prev.tif
+        scale: 0.0001
+        bands: ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+      - filename: veg.tif
+        bands: ["veg"]
 
 # Temporary directory. Allow environment variables in name
 # e.g., $HOME or $PBS_JOBFS
 
 tmpdir: /tmp
+
+# Do not clean up. Useful for debugging.
+
+nocleanup: True
 
 # The shapefile containing the temporary clipping shape which
 # is generated from the area of the NRT observation.
@@ -90,8 +129,8 @@ clipshpfn: clip.json
 gdalconfig:
   GDAL_DISABLE_READDIR_ON_OPEN: YES
   CPL_VSIL_CURL_ALLOWED_EXTENSIONS: '.tif,.geojson'
-  CPL_VSIL_USE_TEMP_FILE_FOR_RANDOM_WRITE: YES
+  #CPL_VSIL_USE_TEMP_FILE_FOR_RANDOM_WRITE: YES
   CPL_CURL_VERBOSE: NO
   CPL_DEBUG: YES
-  AWS_HTTPS: NO
+  AWS_HTTPS: YES
   AWS_NO_SIGN_REQUEST: YES

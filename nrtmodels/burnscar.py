@@ -2,7 +2,6 @@ from .base import Model
 from pathlib import Path
 import numpy as np
 import joblib
-import sys
 
 NBR = '(B08 - B11)/(B08 + B11)'
 BSI = '((B11 + B04) - (B08 - B02)) / ((B11 + B04) + (B08 - B02))'
@@ -187,6 +186,8 @@ class UnsupervisedBurnscarDetect2(Model):
 
         X = self.generate_features(pre, pst)
 
+        self.log(f'Features shape: {X.shape}')
+
         self.log('Masking data')
 
         good = np.isfinite(X).all(axis=2)
@@ -205,7 +206,7 @@ class UnsupervisedBurnscarDetect2(Model):
                 bX, min_sigma=5, max_sigma=30, overlap=0.9, threshold=0.008
             )
 
-        self.log('Blobs detected')
+        self.log('Blob detection')
 
         focus = np.zeros_like(bX, dtype=bool)
         for blob in blobs:
@@ -218,7 +219,7 @@ class UnsupervisedBurnscarDetect2(Model):
         self.log(f"blobs: {blobs.shape[0]}")
 
         if blobs.shape[0] == 0:
-            return outliers
+            return outliers[:,:,np.newaxis]
 
         # TODO: Parameterise radius
 
@@ -257,7 +258,7 @@ class UnsupervisedBurnscarDetect2(Model):
 
         self.log('Done.')
 
-        return outliers
+        return outliers[:,:,np.newaxis]
 
 
 class SupervisedBurnscarDetect1(Model):
@@ -302,4 +303,4 @@ class SupervisedBurnscarDetect1(Model):
         #burns = morphology.convex_hull_object(burns)
         #burns = morphology.binary_erosion(burns, morphology.diamond(3))
 
-        return burns
+        return burns[:,:,np.newaxis]

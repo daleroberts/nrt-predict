@@ -6,12 +6,14 @@ from osgeo import gdal
 DTYPEMAP = {"float32": gdal.GDT_Float32,
             "int16": gdal.GDT_Int16,
             "int8": gdal.GDT_Byte,
+            "uint8": gdal.GDT_Byte,
             "bool": gdal.GDT_Byte}
 
 class Model:
 
     def __init__(self, **kwargs):
         self.verbose = True
+        self.nodata = np.nan
         self.update(**kwargs)
 
     def update(self, **kwargs):
@@ -20,6 +22,7 @@ class Model:
 
     def eval_expr(self, ftrexpr, data):
         self.log(f'Generating feature from: {ftrexpr}')
+        self.log(f"data shape: {data.shape}")
         try:
             env = {
                 **{b: data[b] for b in data.keys()},
@@ -34,7 +37,10 @@ class Model:
             }
             self.log('Evaluation environment created based on dense data')
         with np.errstate(all='ignore'):
-            result = eval(ftrexpr, {"__builtins__": {}}, env)
+            result = np.empty((data.shape[0], data.shape[1]), dtype=np.float32)
+            result[:,:] = eval(ftrexpr, {"__builtins__": {}}, env)
+            mask = ~np.isfinite(result)
+            result[mask] = np.nan
         self.log('Expression evaluated')
         return result
 
@@ -48,10 +54,15 @@ class Model:
     def predict_and_save(self, fn, *datas):
         result = self.predict(*datas)
 
+        if result is None:
+            return
+
         if len(result.shape) == 2:
             result = result[:, :, np.newaxis]
 
         driver = self.driver
+
+        self.log(f"Writing {driver} output to {fn}")
 
         make_cog = False
         if driver == "COG":
@@ -63,6 +74,10 @@ class Model:
         do = gdal.GetDriverByName(driver)
         dtype = DTYPEMAP[result.dtype.name]
 
+        nodata = result.dtype.type(self.nodata).item()
+
+        self.log(f"dtype: {result.dtype} nodata: {nodata} nbands: {result.shape[-1]}")
+
         fd = do.Create(fn, result.shape[1], result.shape[0],
                            result.shape[2], dtype)
 
@@ -72,8 +87,11 @@ class Model:
         for i in range(fd.RasterCount):
             ob = fd.GetRasterBand(i + 1)
             ob.WriteArray(result[:, :, i])
-            ob.SetNoDataValue(np.nan)
-            #ob.SetDescription(self.description[i])
+            ob.SetNoDataValue(nodata)
+            try:
+                ob.SetDescription(self.description[i])
+            except AttributeError:
+                pass
 
         if make_cog:
             ds = gdal.GetDriverByName('COG').CreateCopy(ofn, fd)

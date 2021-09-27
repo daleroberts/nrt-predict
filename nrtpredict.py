@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-Run models on DEA Near-Real-Time (NRT) data.
+Run models on DEA Near-Real-Time (NRT) and Archive data.
 
-Browseable data:
+Browseable NRT data:
 
-    http://dea-public-data.s3-website-ap-southeast-2.amazonaws.com/?prefix=L2/sentinel-2-nrt/
+    https://data.dea.ga.gov.au/?prefix=L2/sentinel-2-nrt/
+
+Or the archive:
+
+    https://data.dea.ga.gov.au/?prefix=baseline/
 """
+from posixpath import expanduser
 import numpy as np
-import itertools
 import argparse
-import requests
 import hashlib
 import joblib
 import psutil
@@ -20,12 +23,10 @@ import os
 import re
 
 from osgeo import gdal, ogr, osr
-from datetime import datetime, timedelta
+from datetime import datetime
 from urllib.parse import urlparse
-from urllib.request import urlopen
 from copy import deepcopy
 from pydoc import locate
-from uuid import uuid4
 from io import BytesIO
 
 gdal.UseExceptions()
@@ -33,6 +34,8 @@ ogr.UseExceptions()
 osr.UseExceptions()
 
 gdal.PushErrorHandler("CPLQuietErrorHandler")
+
+np.set_printoptions(precision=4, linewidth=120, suppress=True, sign='+')
 
 DEBUG = False
 
@@ -50,6 +53,12 @@ class URLParsingError(ValueError):
     """
 
 
+class InputDataError(ValueError):
+    """
+    Raised if there is a problem with input data.
+    """
+
+
 class IncorrectChecksumError(IOError):
     """
     Raised if the model SHA256 checksum doesn't match what is expected.
@@ -63,27 +72,29 @@ class ConnectionError(IOError):
 
 
 class Source:
-    def get_observations(self, url):
+    def get_observations(self, url: str) -> tuple:
         raise NotImplementedError
 
 
 class DEALandsat(Source):
-    def get_observations(self, url):
+    def get_observations(self, url: str) -> tuple:
         pass
 
 
 class DEASentinel2(Source):
-
     def __init__(self):
         self.bands = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
 
-    def get_observations(self, url, product="NBART", onlymask=False, **args):
+    def openfile(self, fn: str):
+        return gdal.Open(fn)
+
+    def get_observations(self, url: str, product: str = "NBART", onlymask: bool = False, **args) -> tuple:
         """
         Get the NRT observation from the S3 or public (HTTP) bucket and load the
         data into memory in a numpy array of shape (ysize, xsize, nbands). This is
         assuming the DEA package format.
         """
-        bands = args.pop('bands_required', self.bands)
+        bands = args.pop("bands_required", self.bands)
 
         pkg = parse_pkg(url)
 
@@ -94,11 +105,11 @@ class DEASentinel2(Source):
         else:
             stripped_url = url
 
-        fn = f"{url}/QA/{pkg}_FMASK.TIF"
-        fd = gdal.Open(fn)
-        mask = fd.ReadAsArray()
+        fn = [fn for fn in gdal.ReadDir(f"{url}/QA") if fn.endswith("FMASK.TIF")][0]
+        fn = f"{url}/QA/{fn}"
 
-        # TODO: use these stats to throw exception if the observation is too cloudy?
+        fd = self.openfile(fn)
+        mask = fd.ReadAsArray()
 
         pnodata = np.count_nonzero(mask == 0) / np.prod(mask.shape)
         pclear = np.count_nonzero(mask == 1) / np.prod(mask.shape)
@@ -121,112 +132,108 @@ class DEASentinel2(Source):
         log("# Loading data")
 
         hc = checksum_array(mask)
-        log(f"Band MASK (sha256:{hc})")
+        log(f"MASK (sha256:{hc})")
+
+        # Handle possible name changes done by DEA between NRT and Archive by creating a mapping
+        # between bands and filenames.
+
+        fns = [fn for fn in gdal.ReadDir(f"{url}/{product}") if fn.endswith(".TIF") or fn.endswith(".tif")]
+        bfm = {fn.split(f"{product}_")[1].split(".")[0]: fn for fn in fns}
 
         # Load other bands
 
         data = np.empty((ysize, xsize, len(bands)), dtype=np.float32)
         for i, band in enumerate(bands):
-            fn = f"{url}/{product}/{product}_{band}.TIF"
-            fd = gdal.Open(fn)
+            fn = f"{url}/{product}/{bfm[band]}"
+            fd = self.openfile(fn)
             fd.ReadAsArray(buf_obj=data[:, :, i], buf_ysize=ysize, buf_xsize=xsize)
             hc = checksum_array(data[:, :, i])
-            log(f"Band {band}  (sha256:{hc})")
+            log(f" {band} (sha256:{hc})")
 
-        data /= 10000
-        data[mask == 0] = np.nan
+        nodata = fd.GetRasterBand(1).GetNoDataValue()
+        data[data == nodata] = np.nan
 
         log(f"\nShape: {data.shape}")
 
-        return (geo, prj, data, mask != 1)
+        return (geo, prj, data, mask)
 
 
-class DEASentinel2Split(Source):
-    def __init__(self):
-        self.bands = ["B02NW", "B02NE", "B02SW", "B02SE", "B03NW", "B03NE", "B03SW", "B03SE",
-                      "B04NW", "B04NE", "B04SW", "B04SE", "B05", "B06", "B07", "B08NW", "B08NE",
-                      "B08SW", "B08SE", "B8A", "B11", "B12"]
+class TiledPrediction:
 
-        self.obands = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
+    """
+    A basic tiling strategy for running predictions over smaller tiles
+    and then reassembling the resulting prediction. This is useful for
+    reducing memory usage.
+    """
 
-    def get_observations(self, url, product="NBART", onlymask=False, **args):
-        """
-        Get the NRT observation from the S3 or public (HTTP) bucket and load the
-        data into memory in a numpy array of shape (ysize, xsize, nbands). This is
-        assuming the DEA package format.
-        """
-        bands_required = args.pop('bands_required', self.bands)
+    def __init__(self, model, tilewidth: int = 1000):
+        self.model = model
+        self.tilewidth = tilewidth
 
-        pkg = parse_pkg(url)
+        self._predict = self.model.predict
+        self.model.predict = self.predict
 
-        if url.startswith("/vsis3"):
-            stripped_url = url.replace("/vsis3/dea-public-data", "https://data.dea.ga.gov.au")
-        elif url.startswith("/vsicurl"):
-            stripped_url = url.replace("/vsicurl/", "")
-        else:
-            stripped_url = url
+    def predict(self, mask, *datas):
+        log(f"Prediction tiling enabled in configuration (tilewidth: {self.tilewidth})")
 
-        fn = f"{url}/QA/{pkg}_FMASK.TIF"
-        fd = gdal.Open(fn)
-        mask = fd.ReadAsArray()
+        shapes = np.array([data.shape for data in datas])
+        assert ((shapes - shapes[0]) == 0).all()
 
-        pnodata = np.count_nonzero(mask == 0) / np.prod(mask.shape)
-        pclear = np.count_nonzero(mask == 1) / np.prod(mask.shape)
+        h = self.tilewidth
 
-        log(f"Package:   {pkg}")
-        log(f"Thumbnail: {stripped_url}/{product}/{product}_THUMBNAIL.JPG")
-        log(f"Location:  {stripped_url}/map.html")
-        log(f"Clear %:   {pclear:.4f}")
+        oshape = shapes[0]
+        augshape = shapes[0, 0] + (h - (shapes[0, 0] % h))
+        dtypes = [d.dtype for d in datas]
 
-        geo = fd.GetGeoTransform()
-        prj = fd.GetProjection()
+        log(f"Data types: {dtypes}")
+        log(f"Tile shape: {(self.tilewidth, self.tilewidth)}")
+        log(f"Data shape: {tuple(oshape)} -> Augmented shape: {(augshape, augshape)}")
+        log(f"   # Tiles: {(augshape//self.tilewidth)**2}")
 
-        ysize, xsize = mask.shape
+        yhat = None
 
-        if onlymask:
-            return (geo, prj, mask[:, :, np.newaxis])
+        log("Starting tiled prediction")
 
-        hc = checksum_array(mask)
-        log(f"Band MASK (sha256:{hc}) {mask.shape[0]} x {mask.shape[1]}")
+        for i in range(0, augshape, h):
+            for j in range(0, augshape, h):
+                if yhat is None:
+                    # detect the shape of predictions from the first tile computed
+                    tmask = mask[i : i + h, j : j + h]
+                    tdatas = [dd[i : i + h, j : j + h, :] for dd in datas]
+                    result = self._predict(tmask, *tdatas)
+                    yhat = np.zeros((augshape, augshape, result.shape[-1]), np.float32)
+                    yhat[i : i + h, j : j + h, :] = result
+                    continue
 
-        data = np.empty((ysize, xsize, len(self.bands)), dtype=np.float32)
-        k = 0
+                # Do this edge case seperately to avoid copies for bulk of cases
+                if (oshape[0] < i + h) or (oshape[1] < j + h):
+                    tdatas = []
+                    for dd in datas:
+                        ddd = dd[i : min(dd.shape[0], i + h), j : min(dd.shape[1], j + h), :]
+                        tmp = np.nan * np.zeros((h, h, ddd.shape[-1]), dtype=np.float32)
+                        tmp[: ddd.shape[0], : ddd.shape[1], :] = ddd
+                        tdatas.append(tmp)
+                    shp = ddd.shape
+                    tmask = np.zeros((h, h), dtype=tmask.dtype)
+                    tmask[: shp[0], : shp[1]] = mask[i : min(mask.shape[0], i + h), j : min(mask.shape[1], j + h)]
+                    yhat[i : i + h, j : j + h, :] = self._predict(tmask, *tdatas)
+                    continue
 
-        for i, band in enumerate(self.obands):
-            fn = f"{url}/{product}/{product}_{band}.TIF"
-            fd = gdal.Open(fn)
-            bysize, bxsize = fd.RasterYSize, fd.RasterXSize
+                # Bulk of cases
+                tmask = mask[i : i + h, j : j + h]
+                tdatas = [dd[i : i + h, j : j + h, :] for dd in datas]
+                yhat[i : i + h, j : j + h, :] = self._predict(tmask, *tdatas)
 
-            if (bysize == 2 * ysize) and (bxsize == 2 * xsize):
-                bdata = np.empty((bysize, bxsize), dtype=np.float32)
-                fd.ReadAsArray(buf_obj=bdata[:, :], buf_ysize=bysize, buf_xsize=bxsize)
-                
-                data[:,:,k] = bdata[0::2,0::2]
-                hc = checksum_array(data[:,:,k])
-                log(f"Band {band}NW (sha256:{hc}) {ysize} x {xsize}")
-                k = k + 1                
+            log(f"... Completed: {(i+h)/augshape*100:3.2f}%")
 
-                data[:,:,k] = bdata[0::2,1::2]
-                hc = checksum_array(data[:,:,k])
-                log(f"Band {band}NE (sha256:{hc}) {ysize} x {xsize}")
-                k = k + 1                
+        yhat = yhat[: oshape[0], : oshape[1], :]
 
-                data[:,:,k] = bdata[1::2,0::2]
-                hc = checksum_array(data[:,:,k])
-                log(f"Band {band}SW (sha256:{hc}) {ysize} x {xsize}")
-                k = k + 1                
+        log(f"Output shape: {yhat.shape}")
 
-                data[:,:,k] = bdata[1::2,1::2]
-                hc = checksum_array(data[:,:,k])
-                log(f"Band {band}SE (sha256:{hc}) {ysize} x {xsize}")
-                k = k + 1                
-            else:
-                fd.ReadAsArray(buf_obj=data[:, :,k], buf_ysize=ysize, buf_xsize=xsize)
-                hc = checksum_array(data[:,:,k])
-                log(f"Band {band}  (sha256:{hc}) {ysize} x {xsize}")
-                k = k + 1
+        return yhat
 
-        return (geo, prj, data, mask != 1)
+    def predict_and_save(self, fn: str, *datas):
+        self.model.predict_and_save(fn, *datas)
 
 
 def get_s3_client():
@@ -240,7 +247,7 @@ def get_s3_client():
     return boto3.client("s3", config=Config(signature_version=UNSIGNED))
 
 
-def checksum_array(arr):
+def checksum_array(arr: np.ndarray) -> str:
     """
     Checksum a numpy array.
     """
@@ -249,7 +256,7 @@ def checksum_array(arr):
     return hasher.hexdigest()
 
 
-def checksum_file(f, blocksize=2 << 15):
+def checksum_file(f, blocksize: int = 2 << 15) -> str:
     """
     Checksum a file-like object.
     """
@@ -260,7 +267,7 @@ def checksum_file(f, blocksize=2 << 15):
     return hasher.hexdigest()
 
 
-def check_checksum(f, checksum, blocksize=2 << 15):
+def check_checksum(f, checksum: str, blocksize: int = 2 << 15):
     """
     Check that the SHA256 checksum of a file-type object matches the 'checksum'. Raises
     an 'IncorrectChecksumError' if they don't match.
@@ -284,7 +291,7 @@ def check_checksum(f, checksum, blocksize=2 << 15):
 # TODO: path@sha256:123123 format?
 
 
-def get_model(name, **config):
+def get_model(name: str, **config):
     """
     Given 'name', load a `Model` from disk and update its settings.
     This handles the standard case where the models are stored in
@@ -315,7 +322,7 @@ def get_model(name, **config):
             s3 = get_s3_client()
             s3.download_fileobj(Bucket=bucket, Key=key, Fileobj=f)
             f.seek(0)
-            check_checksum(f, checksum)
+            # check_checksum(f, checksum)
             f.seek(0)
             model = joblib.load(f)
             model.update(**config)
@@ -335,7 +342,7 @@ def get_model(name, **config):
     return model
 
 
-def normalise_url(url):
+def normalise_url(url: str) -> str:
     """
     Simple check to see if it is a valid URL.
     """
@@ -359,24 +366,27 @@ def normalise_url(url):
     else:
         raise URLParsingError(f"Cannot normalise the URL {url}")
 
+    if url.endswith("/"):
+        url = url[:-1]
+
     return url
 
 
-def listfmt(lst):
+def listfmt(lst: list) -> str:
     """
     Format a list as a str with 4 decimal places of accuracy.
     """
     return "(" + ", ".join([f"{x:.4f}" for x in lst]) + ")"
 
 
-def wktfmt(wkt):
+def wktfmt(wkt: str) -> str:
     """
     Round numbers in WKT str to 4 decimal places of accuracy.
     """
     return re.sub(r"([+-]*\d*\.\d\d\d\d)(\d*)", r"\1", wkt)
 
 
-def sizefmt(num, suffix="B"):
+def sizefmt(num: int, suffix="B") -> str:
     """
     Format sizes in a human readible style.
     """
@@ -387,7 +397,7 @@ def sizefmt(num, suffix="B"):
     return "%.1f%s%s" % (num, "Yi", suffix)
 
 
-def log(msg="", noinfo=False, color=GREEN):
+def log(msg: str = "", noinfo: bool = False, color=GREEN):
     """
     Log a message.
     """
@@ -407,27 +417,26 @@ def log(msg="", noinfo=False, color=GREEN):
     else:
         msg = str(msg)
     if DEBUG and not msg.startswith("#"):
-        print(mem + " " + msg, file=sys.stderr)
+        print(mem + "\t" + msg, file=sys.stderr)
     else:
         print(msg, file=sys.stderr)
 
 
-def warning(msg):
+def warning(msg: str):
     """
     Warning!
     """
     print("\n" + RED + str(msg) + RST, file=sys.stderr)
 
 
-def parse_pkg(url):
+def parse_pkg(url: str) -> str:
     """
     Package name parsing.
     """
-    # TODO: Does this need to be improved for edge cases?
     return [x for x in url.split("/") if len(x) > 0][-1]
 
 
-def parse_obsdate(url):
+def parse_obsdate(url: str) -> str:
     """
     Parse observation date from url.
     """
@@ -435,7 +444,7 @@ def parse_obsdate(url):
     return datetime.strptime(pkg.split("_")[6], "%Y%m%dT%H%M%S")
 
 
-def get_bounds(url, **args):
+def get_bounds(url: str) -> str:
     """
     Return bounds of url as WKT string. Given in EPSG:4326.
     """
@@ -448,18 +457,13 @@ def get_bounds(url, **args):
         error = gdal.GetLastErrorMsg()
         raise ConnectionError(error)
 
-    # req = requests.get(fn.replace('/vsicurl/', ''))
-    # fn = "/vsimem/bounds.geojson"
-    # gdal.FileFromMemBuffer(fn, req.content)
-    # fd = ogr.Open(fn)
-
     layer = fd.GetLayer()
     ftr = layer.GetFeature(0)
     poly = ftr.GetGeometryRef()
     return poly.ExportToWkt()
 
 
-def polygon_from_geobox(geo, xsize, ysize):
+def polygon_from_geobox(geo: tuple, xsize: int, ysize: int):
     """
     Generate a polygon from a geobox and the number of pixels.
     """
@@ -474,7 +478,7 @@ def polygon_from_geobox(geo, xsize, ysize):
     return poly
 
 
-def generate_clip_shape_from(fn, shpfn):
+def generate_clip_shape_from(fn: str, shpfn: str) -> str:
     """
     Take a filename to a raster object (could be in /vsimem) and
     generate the shape of the observation.
@@ -517,6 +521,7 @@ def run(
     inputs=None,
     tmpdir=None,
     models=None,
+    nocleanup=False,
     **args,
 ):
     """
@@ -537,12 +542,13 @@ def run(
         driver = config.pop("driver")
         inputs = config.pop("inputs")
 
-        log(f"Model: {name}")
+        log(f"Model: {name} -> {outfn}")
 
         try:
 
             model = get_model(name, **config)
-            model.log = log
+            if model.verbose:
+                model.log = log
 
         except IncorrectChecksumError as e:
             warning(f"Model has an incorrect SHA256 checksum, exiting...")
@@ -572,7 +578,7 @@ def run(
         else:
             return x
 
-    bands = {band:False for band in source.bands}
+    bands = {band: False for band in source.bands}
     for model in loaded_models:
         try:
             required = [name(b) for b in model.required_bands]
@@ -580,33 +586,40 @@ def run(
             required = source.bands
         for band in required:
             bands[band] = True
-    bands = [k for k,v in bands.items() if v is True]
+    bands = [k for k, v in bands.items() if v is True]
 
     log(f"Req.Bands: {','.join(bands)}")
 
-    geo, prj, obsdata, mask = source.get_observations(url, bands_required=bands)
+    if len(bands) == 0:
+        # get at least one band
+        bands = ["B02"]
+
+    obsgeo, obsprj, obsdata, mask = source.get_observations(url, bands_required=bands)
+
+    ysize, xsize = mask.shape
+    obspoly = polygon_from_geobox(obsgeo, xsize, ysize)
 
     log(f"# Preparing ancillary data")
 
     log(f"Writing mask to mask.tif")
 
-    ysize, xsize = mask.shape
     driver = gdal.GetDriverByName("GTiff")
-    fd = driver.Create('mask.tif', xsize, ysize, 1, gdal.GDT_Byte)
-    fd.SetGeoTransform(geo)
-    fd.SetProjection(prj)
+    fd = driver.Create("mask.tif", xsize, ysize, 1, gdal.GDT_Byte)
+    fd.SetGeoTransform(obsgeo)
+    fd.SetProjection(obsprj)
     ob = fd.GetRasterBand(1)
     ob.WriteArray(mask)
     ob.SetNoDataValue(0)
     del fd
 
-    log(f"Writing observation data to {obstmp}")
-
     ysize, xsize, psize = obsdata.shape
+
+    log(f"Writing observation data to {obstmp}. Data has {psize} bands.")
+
     driver = gdal.GetDriverByName("GTiff")
     fd = driver.Create(obstmp, xsize, ysize, psize, gdal.GDT_Float32)
-    fd.SetGeoTransform(geo)
-    fd.SetProjection(prj)
+    fd.SetGeoTransform(obsgeo)
+    fd.SetProjection(obsprj)
     for i in range(fd.RasterCount):
         ob = fd.GetRasterBand(i + 1)
         ob.WriteArray(obsdata[:, :, i])
@@ -617,7 +630,7 @@ def run(
     log(f"Determining ancillary files required")
 
     outputs = []
-    inputs = []
+    inputfns = []
     for model in models:
         name = model["name"]
 
@@ -629,7 +642,7 @@ def run(
         for ip in ips:
             fn = ip["filename"]
             if fn not in outputs:
-                inputs.append(fn)
+                inputfns.append(fn)
 
         outputs.append(output)
 
@@ -637,32 +650,59 @@ def run(
 
     # Get the unique inputs
 
-    inputs = [*{*inputs}]
+    inputfns = [*{*inputfns}]
 
-    if len(inputs) > 0:
+    if len(inputfns) > 0:
         log("Determining clip area from NRT observation")
 
         clipshpfn = generate_clip_shape_from(obstmp, clipshpfn)
 
         if not clipshpfn.startswith("/vsimem"):
-            log(f"Proj: {prj}")
+            log(f"Proj: {obsprj}")
             log(f"Saving clipping area to disk as '{clipshpfn}'")
     else:
-        log(f"No ancillary datasets are required!")
+        log(f"No ancillary datas are required!")
 
     datamap = {}
 
-    for afn in inputs:
+    obssr = osr.SpatialReference()
+    obssr.ImportFromProj4(obsprj)
+
+    for afn in inputfns:
         ofn = f"{tmpdir}/{uuid.uuid4()}"
+
+        fd = gdal.Open(afn)
+        geo = fd.GetGeoTransform()
+        prj = fd.GetProjection()
+
+        insr = osr.SpatialReference()
+        insr.ImportFromProj4(prj)
+
+        insr_to_obssr = osr.CoordinateTransformation(insr, obssr)
+        poly = polygon_from_geobox(geo, fd.RasterXSize, fd.RasterYSize)
+        poly.Transform(insr_to_obssr)
+
+        if not poly.Intersects(obspoly):
+            raise InputDataError(f"Input data '{afn}' does not intersect observation.")
 
         log(f"Clipping and warping input '{afn}' to '{ofn}'")
 
-        fd = gdal.Warp(ofn, afn, cutlineDSName=clipshpfn, cropToCutline=True, dstSRS=prj)
+        fd = gdal.Warp(ofn, fd, cutlineDSName=clipshpfn, cropToCutline=True, dstSRS=obsprj)
 
         datamap[afn] = ofn
 
+    # Get processing configuration parameters
 
-    log("# Applying loaded models")
+    tilewidth = args.pop("tilewidth", None)
+    obsscale = args.pop("obsscale", None)
+
+    # Scale observation data
+
+    if obsscale is not None:
+        log(f"Scaling observation data by {obsscale}")
+        obsdata *= float(obsscale)
+
+    log("# Applying loaded models to data")
 
     for model, m in zip(loaded_models, models):
 
@@ -670,30 +710,38 @@ def run(
 
         name = config.pop("name")
 
-        log(f"@{name}")
+        log(f"@Running '{name}' model")
 
         # Update model config based on new information from observation
 
+        config["obsurl"] = url
         config["obswkt"] = obswkt
         config["obsdate"] = obsdate
-        config["geo"] = geo
-        config["prj"] = prj
-        config["bands"] = bands # possibly reduced set of bands
+        config["geo"] = obsgeo
+        config["prj"] = obsprj
+        config["bands"] = bands  # possibly reduced set of bands
+
+        log("Observation data:")
+        log(f"   data min: {np.nanmin(obsdata)} max: {np.nanmax(obsdata)}")
+        log(f"   pixel resolution: {obsgeo[1]:.4f} x {obsgeo[5]:.4f}")
 
         model.update(**config)
 
         # Prepare all the appropriate ancillary data sets and pass the
         # observation data as the last one in the list.
 
-        args = [mask.copy()]
+        datas = [mask.copy()]
 
-        inputs = m["inputs"]
+        outfn = m["output"]
+        inputfns = m["inputs"]
 
-        log("Inputs:")
-        for ip in inputs:
+        log("Loading model inputs:")
+        for ip in inputfns:
             fn = datamap[ip["filename"]]
 
             fd = gdal.Open(fn)
+
+            geo = fd.GetGeoTransform()
 
             # First assume bands are the same as source
             ipbands = source.bands
@@ -704,7 +752,7 @@ def run(
                 # If that fails, try to get bandnames from file
                 fbands = []
                 for i in range(fd.RasterCount):
-                    rb = fd.GetRasterBand(i+1)
+                    rb = fd.GetRasterBand(i + 1)
                     desc = rb.GetDescription()
                     if len(desc) > 0:
                         fbands.append(desc)
@@ -716,7 +764,7 @@ def run(
 
             notreq = set(source.bands) - set(bands)
             toload = [b for b in ipbands if b not in notreq]
-            bandidx = [i+1 for i, b in zip(range(fd.RasterCount), ipbands) if b not in notreq]
+            bandidx = [i + 1 for i, b in zip(range(fd.RasterCount), ipbands) if b not in notreq]
             log(f"   loading: {','.join(toload)}")
 
             nbands = len(bandidx)
@@ -740,35 +788,44 @@ def run(
             if pnan > 0.9:
                 warning(f"clipped input '{afn}' has more than 90% no data")
 
-            # TODO: scale, etc?
+            scale = ip.pop("scale", None)
+            if scale is not None:
+                log(f"   scaling: {scale}")
+                data *= scale
 
-            args.append(data)
+            log(f"   data min: {np.nanmin(data)} max: {np.nanmax(data)}")
+            log(f"   pixel resolution: {geo[1]:.4f} x {geo[5]:.4f}")
 
-        args.append(obsdata)
+            datas.append(data)
+
+        datas.append(obsdata)
+
+        log(f"Output: {outfn}")
+
+        log("Running model predictions")
 
         # The model is responsible for saving its prediction to disk (or memory
         # using /vsimem) as it is best placed to make a decision on the format, etc.
         # A simple model only needs to implement the `predict` method but can also
         # implement `predict_and_save` if more control of writing output is needed.
 
-        #try:
+        if tilewidth:
+            model = TiledPrediction(model, int(tilewidth))
 
-        model.predict_and_save(outfn, *args)
+        model.predict_and_save(outfn, *datas)
 
-        #except Exception as e:
-        #    traceback = e.__traceback__
-        #    warning(f"Error in model '{name}': {e}, see line {traceback.tb_lineno}.")
-        #    sys.exit(1)
+        datamap[outfn] = outfn
 
-        log("")
+        log("Finished running predictions")
+
+    if nocleanup:
+        return
 
     log("# Cleaning up")
 
     for k, fn in datamap.items():
         log(f"Removing {fn}")
         gdal.Unlink(fn)
-
-    log("")
 
 
 def astuple(v):
@@ -799,6 +856,7 @@ def check_config(args):
         ("obstmp", "/tmp/obs.tif"),
         ("clipshpfn", "/tmp/clip.json"),
         ("tmpdir", "/tmp"),
+        ("nocleanup", False),
         ("gdalconfig", {}),
         ("models", []),
     ]
@@ -819,12 +877,6 @@ def check_config(args):
         log(f"GDAL option {k} = {v}")
 
     ## Check that models exists
-
-    # nonnull = ["models"]
-    # for s in nonnull:
-    #    if not s in args:
-    #        warning(f"error: '{s}' should be set in the configuration.")
-    #        errors = True
 
     if not isinstance(args["models"], list):
         log("'models' must be a list of models")
@@ -877,18 +929,6 @@ def check_config(args):
             fn = normalise_url(ip["filename"])
             ip["filename"] = fn
 
-        # Check existence of input files
-
-        # for ip in m["inputs"]:
-        #    fn = ip['filename']
-        #    try:
-        #        fd = gdal.Open(fn)
-        #    except RuntimeError as e:
-        #        warning(f"Input file error: {e}")
-        #        errors = True
-        #    finally:
-        #        fd = None
-
         # Parse tuples as tuples of numbers for models
 
         for k, v in m.items():
@@ -896,6 +936,15 @@ def check_config(args):
                 for kk, vv in v.items():
                     if isinstance(vv, str) and vv.startswith("(") and vv.endswith(")"):
                         v[kk] = astuple(vv)
+
+        defaults = [
+            ("output", "result.tif"),
+        ]
+
+        for arg, value in defaults:
+            if not arg in m.keys():
+                log(f"Model {name} '{arg}' not set, setting to default: {arg} = {value}")
+                m[arg] = value
 
     args["models"] = models
 
@@ -918,6 +967,7 @@ def cli_entry(url=None, **kwargs):
         parser.add_argument("url")
 
     parser.add_argument("-config", default="nrtpredict.yaml", metavar=("yamlfile"))
+    parser.add_argument("-tilewidth", default=None)
 
     # ...
 
@@ -934,13 +984,13 @@ def cli_entry(url=None, **kwargs):
         with open(fn) as fd:
             fargs = yaml.safe_load(fd)
             if fargs:
-                args = {**args, **fargs}
+                args = {**fargs, **args}
 
         log(f"Loading configuration from '{fn}'")
 
     except yaml.parser.ParserError as e:
         warning(f"Configuration file '{fn}' has incorrect YAML syntax: {e}")
-        warning("\nContinuing without configuration file...")
+        sys.exit(100)
 
     except FileNotFoundError:
         warning(f"Configuration file '{fn}' not found.")
@@ -972,9 +1022,17 @@ def cli_entry(url=None, **kwargs):
         warning(f"Runtime Error: {e}")
         sys.exit(3)
 
+    except NameError as e:
+        warning(f"Unknown: {e}")
+        sys.exit(4)
+
+    except InputDataError as e:
+        warning(f"{e}")
+        sys.exit(5)
+
     except KeyboardInterrupt:
         warning(f"Processing interrupted, exiting...")
-        sys.exit(100)
+        sys.exit(1000)
 
 
 if __name__ == "__main__":
